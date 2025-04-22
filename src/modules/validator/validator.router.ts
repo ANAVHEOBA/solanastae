@@ -20,4 +20,12 @@ router.get('/signature-statuses', validatorController.getSignatureStatuses.bind(
 
 router.get('/slot-leaders', validatorController.getSlotLeaders.bind(validatorController));
 
+router.get('/transaction', validatorController.getTransaction.bind(validatorController));
+
+router.get('/prioritization-fees', validatorController.getPrioritizationFees.bind(validatorController));
+
+router.get('/token-accounts-by-owner', validatorController.getTokenAccountsByOwner.bind(validatorController));
+
+router.get('/token-supply', validatorController.getTokenSupply.bind(validatorController));
+
 export const validatorRouter = router;

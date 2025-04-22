@@ -306,4 +306,227 @@ export class ValidatorController {
             });
         }
     }
+
+    async getTransaction(req: Request, res: Response) {
+        try {
+            console.log('[ValidatorController] Getting transaction...');
+            const signature = req.query.signature as string;
+            const encoding = (req.query.encoding as 'json' | 'base58' | 'base64') || 'json';
+
+            if (!signature) {
+                throw new Error('Transaction signature is required');
+            }
+
+            const result = await ValidatorModel.getTransaction(signature, encoding);
+            console.log('[ValidatorController] Successfully got transaction:', {
+                slot: result.data?.slot,
+                signature
+            });
+            
+            res.json({
+                jsonrpc: '2.0',
+                id: 1,
+                result: result
+            });
+        } catch (error) {
+            console.error('[ValidatorController] Error getting transaction:', error);
+            
+            let errorMessage = 'Failed to get transaction';
+            let statusCode = 500;
+
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    errorMessage = 'Request timed out. The RPC node is taking too long to respond. Please try again later.';
+                    statusCode = 504; // Gateway Timeout
+                } else if (error.message.includes('ENETUNREACH')) {
+                    errorMessage = 'Network error. Unable to reach the RPC node. Please check your internet connection.';
+                    statusCode = 503; // Service Unavailable
+                } else if (error.message.includes('signature')) {
+                    errorMessage = error.message;
+                    statusCode = 400; // Bad Request
+                } else {
+                    errorMessage = error.message;
+                }
+            }
+
+            res.status(statusCode).json({
+                jsonrpc: '2.0',
+                id: 1,
+                error: {
+                    code: statusCode,
+                    message: errorMessage
+                }
+            });
+        }
+    }
+
+    async getPrioritizationFees(req: Request, res: Response) {
+        try {
+            console.log('[ValidatorController] Getting prioritization fees...');
+            const accounts = req.query.accounts ? (req.query.accounts as string).split(',') : undefined;
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 20;
+
+            if (page < 1) {
+                throw new Error('Page number must be greater than 0');
+            }
+            if (limit < 1 || limit > 100) {
+                throw new Error('Limit must be between 1 and 100');
+            }
+
+            const result = await ValidatorModel.getRecentPrioritizationFees(accounts);
+            console.log('[ValidatorController] Successfully got prioritization fees:', result);
+            
+            res.json({
+                jsonrpc: '2.0',
+                id: 1,
+                result: {
+                    data: result,
+                    pagination: {
+                        total: result.length,
+                        page,
+                        limit,
+                        totalPages: Math.ceil(result.length / limit)
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('[ValidatorController] Error getting prioritization fees:', error);
+            
+            let errorMessage = 'Failed to get prioritization fees';
+            let statusCode = 500;
+
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    errorMessage = 'Request timed out. The RPC node is taking too long to respond. Please try again later.';
+                    statusCode = 504; // Gateway Timeout
+                } else if (error.message.includes('ENETUNREACH')) {
+                    errorMessage = 'Network error. Unable to reach the RPC node. Please check your internet connection.';
+                    statusCode = 503; // Service Unavailable
+                } else if (error.message.includes('Page number') || error.message.includes('Limit must be')) {
+                    errorMessage = error.message;
+                    statusCode = 400; // Bad Request
+                } else {
+                    errorMessage = error.message;
+                }
+            }
+
+            res.status(statusCode).json({
+                jsonrpc: '2.0',
+                id: 1,
+                error: {
+                    code: statusCode,
+                    message: errorMessage
+                }
+            });
+        }
+    }
+
+    async getTokenAccountsByOwner(req: Request, res: Response) {
+        try {
+            console.log('[ValidatorController] Getting token accounts by owner...');
+            const owner = req.query.owner as string;
+            const programId = req.query.programId as string;
+            const encoding = (req.query.encoding as 'jsonParsed' | 'base58' | 'base64') || 'jsonParsed';
+
+            if (!owner) {
+                throw new Error('Owner address is required');
+            }
+
+            const response = await ValidatorModel.getTokenAccountsByOwner(owner, programId, encoding);
+            console.log('[ValidatorController] Successfully got token accounts:', {
+                count: response.value.length,
+                slot: response.context.slot
+            });
+            
+            res.json({
+                jsonrpc: '2.0',
+                id: 1,
+                result: response
+            });
+        } catch (error) {
+            console.error('[ValidatorController] Error getting token accounts:', error);
+            
+            let errorMessage = 'Failed to get token accounts';
+            let statusCode = 500;
+
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    errorMessage = 'Request timed out. The RPC node is taking too long to respond. Please try again later.';
+                    statusCode = 504; // Gateway Timeout
+                } else if (error.message.includes('ENETUNREACH')) {
+                    errorMessage = 'Network error. Unable to reach the RPC node. Please check your internet connection.';
+                    statusCode = 503; // Service Unavailable
+                } else if (error.message.includes('Owner address')) {
+                    errorMessage = error.message;
+                    statusCode = 400; // Bad Request
+                } else {
+                    errorMessage = error.message;
+                }
+            }
+
+            res.status(statusCode).json({
+                jsonrpc: '2.0',
+                id: 1,
+                error: {
+                    code: statusCode,
+                    message: errorMessage
+                }
+            });
+        }
+    }
+
+    async getTokenSupply(req: Request, res: Response) {
+        try {
+            console.log('[ValidatorController] Getting token supply...');
+            const mint = req.query.mint as string;
+
+            if (!mint) {
+                throw new Error('Mint address is required');
+            }
+
+            const response = await ValidatorModel.getTokenSupply(mint);
+            console.log('[ValidatorController] Successfully got token supply:', {
+                amount: response.value.amount,
+                decimals: response.value.decimals,
+                uiAmount: response.value.uiAmount,
+                slot: response.context.slot
+            });
+            
+            res.json({
+                jsonrpc: '2.0',
+                id: 1,
+                result: response
+            });
+        } catch (error) {
+            console.error('[ValidatorController] Error getting token supply:', error);
+            
+            let errorMessage = 'Failed to get token supply';
+            let statusCode = 500;
+
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    errorMessage = 'Request timed out. The RPC node is taking too long to respond. Please try again later.';
+                    statusCode = 504; // Gateway Timeout
+                } else if (error.message.includes('ENETUNREACH')) {
+                    errorMessage = 'Network error. Unable to reach the RPC node. Please check your internet connection.';
+                    statusCode = 503; // Service Unavailable
+                } else if (error.message.includes('Mint address')) {
+                    errorMessage = error.message;
+                    statusCode = 400; // Bad Request
+                } else {
+                    errorMessage = error.message;
+                }
+            }
+
+            res.status(statusCode).json({
+                jsonrpc: '2.0',
+                id: 1,
+                error: {
+                    code: statusCode,
+                    message: errorMessage
+                }
+            });
+        }
+    }
 }

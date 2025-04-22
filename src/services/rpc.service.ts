@@ -6,6 +6,7 @@ import * as dns from 'dns';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { ClusterNode } from '../modules/network/network.schema';
+import { Transaction } from '../modules/validator/validator.schema';
 
 interface VoteAccountParams {
     votePubkey?: string;
@@ -298,6 +299,101 @@ interface SignatureStatusesResponse {
     error?: {
         code: number;
         message: string;
+    };
+}
+
+interface TransactionResponse {
+    jsonrpc: string;
+    id: number;
+    result: Transaction | null;
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+interface PrioritizationFee {
+    account: string;
+    fee: number;
+    slot: number;
+}
+
+interface PrioritizationFeesResponse {
+    jsonrpc: string;
+    id: number;
+    result: PrioritizationFee[];
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+interface SlotResponse {
+    jsonrpc: string;
+    id: number;
+    result: number;
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+interface BlockTimeResponse {
+    jsonrpc: string;
+    id: number;
+    result: number | null;
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+export interface TokenAccount {
+    pubkey: string;
+    account: {
+        lamports: number;
+        owner: string;
+        data: {
+            program: string;
+            parsed: {
+                info: {
+                    isNative: boolean;
+                    mint: string;
+                    owner: string;
+                    state: string;
+                    tokenAmount: {
+                        amount: string;
+                        decimals: number;
+                        uiAmount: number;
+                        uiAmountString: string;
+                    };
+                };
+            };
+            space: number;
+        };
+        executable: boolean;
+        rentEpoch: number;
+        space: number;
+    };
+}
+
+export interface TokenAccountsResponse {
+    context: {
+        apiVersion: string;
+        slot: number;
+    };
+    value: TokenAccount[];
+}
+
+interface TokenSupplyResponse {
+    context: {
+        slot: number;
+    };
+    value: {
+        amount: string;
+        decimals: number;
+        uiAmount: number;
+        uiAmountString: string;
     };
 }
 
@@ -1570,6 +1666,379 @@ class RPCService extends EventEmitter {
         }
 
         throw new Error('Failed to get signature statuses after all retry attempts');
+    }
+
+    async getTransaction(signature: string, encoding: 'json' | 'base58' | 'base64' = 'json'): Promise<Transaction | null> {
+        const maxRetries = 3;
+        const baseDelay = 1000; // 1 second
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log('[RPCService] Getting transaction...', { signature, encoding, attempt });
+                const response = await this.retryRequest(async () => {
+                    try {
+                        const result = await axios.post<TransactionResponse>(
+                            this.getFullUrl(),
+                            {
+                                jsonrpc: '2.0',
+                                id: 1,
+                                method: 'getTransaction',
+                                params: [signature, encoding]
+                            },
+                            {
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                timeout: 10000 // 10 second timeout
+                            }
+                        );
+
+                        console.log('[RPCService] Raw RPC response:', {
+                            jsonrpc: result.data.jsonrpc,
+                            id: result.data.id,
+                            hasError: !!result.data.error,
+                            hasResult: !!result.data.result,
+                            resultSlot: result.data.result?.slot
+                        });
+
+                        if (result.data.error) {
+                            console.error('[RPCService] RPC error response:', result.data.error);
+                            throw new Error(`RPC Error: ${result.data.error.message}`);
+                        }
+
+                        return result.data;
+                    } catch (error) {
+                        if (error && typeof error === 'object' && 'isAxiosError' in error) {
+                            const axiosError = error as any;
+                            console.error('[RPCService] Network error getting transaction:', {
+                                code: axiosError.code,
+                                message: axiosError.message,
+                                response: axiosError.response?.data,
+                                status: axiosError.response?.status
+                            });
+                        }
+                        throw error;
+                    }
+                });
+
+                if (response.error) {
+                    throw new Error(`RPC Error: ${response.error.message}`);
+                }
+
+                if (!response.result) {
+                    console.log('[RPCService] Transaction not found:', { signature });
+                    return null;
+                }
+
+                console.log('[RPCService] Successfully got transaction:', {
+                    slot: response.result.slot,
+                    signature,
+                    hasTransaction: !!response.result.transaction,
+                    hasMeta: !!response.result.meta
+                });
+
+                return response.result;
+            } catch (error: unknown) {
+                console.error(`[RPCService] Error getting transaction (attempt ${attempt}/${maxRetries}):`, error);
+                
+                if (attempt === maxRetries) {
+                    if (error instanceof Error) {
+                        if (error.message.includes('ETIMEDOUT')) {
+                            throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
+                        } else if (error.message.includes('ENETUNREACH')) {
+                            throw new Error('Network error. Unable to reach the RPC node. Please check your internet connection.');
+                        }
+                    }
+                    throw error;
+                }
+
+                // Calculate exponential backoff delay
+                const delay = baseDelay * Math.pow(2, attempt - 1);
+                console.log(`[RPCService] Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        throw new Error('Failed to get transaction after all retry attempts');
+    }
+
+    async getRecentPrioritizationFees(accounts?: string[]): Promise<PrioritizationFee[]> {
+        try {
+            console.log('[RPCService] Getting recent prioritization fees...', { accounts });
+            
+            const response = await this.retryRequest(async () => {
+                const result = await axios.post<PrioritizationFeesResponse>(
+                    this.getFullUrl(),
+                    {
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getRecentPrioritizationFees',
+                        params: accounts ? [accounts] : []
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: this.timeout
+                    }
+                );
+
+                if (result.data.error) {
+                    throw new Error(`RPC Error: ${result.data.error.message}`);
+                }
+
+                return result.data;
+            });
+
+            console.log('[RPCService] Successfully got prioritization fees:', response.result);
+            return response.result;
+        } catch (error) {
+            console.error('[RPCService] Error getting prioritization fees:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                code: (error as any)?.code,
+                type: error instanceof Error ? error.constructor.name : typeof error
+            });
+            
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
+                } else if (error.message.includes('ENETUNREACH')) {
+                    throw new Error('Network error. Unable to reach the RPC node. Please check your internet connection.');
+                }
+            }
+            throw error;
+        }
+    }
+
+    async getSlot(commitment: 'processed' | 'confirmed' | 'finalized' = 'finalized'): Promise<number> {
+        try {
+            console.log('[RPCService] Getting current slot...', { commitment });
+            const response = await this.retryRequest(async () => {
+                try {
+                    const result = await axios.post<SlotResponse>(
+                        this.getFullUrl(),
+                        {
+                            jsonrpc: '2.0',
+                            id: 1,
+                            method: 'getSlot',
+                            params: [{ commitment }]
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 10000
+                        }
+                    );
+
+                    if (result.data.error) {
+                        throw new Error(`RPC Error: ${result.data.error.message}`);
+                    }
+
+                    return result.data;
+                } catch (error) {
+                    if (error && typeof error === 'object' && 'isAxiosError' in error) {
+                        const axiosError = error as any;
+                        console.error('[RPCService] Network error getting slot:', {
+                            code: axiosError.code,
+                            message: axiosError.message,
+                            response: axiosError.response?.data,
+                            status: axiosError.response?.status
+                        });
+                    }
+                    throw error;
+                }
+            });
+
+            console.log('[RPCService] Successfully got slot:', response.result);
+            return response.result;
+        } catch (error) {
+            console.error('[RPCService] Error getting slot:', error);
+            throw error;
+        }
+    }
+
+    async getBlockTime(slot: number): Promise<number | null> {
+        try {
+            console.log('[RPCService] Getting block time...', { slot });
+            const response = await this.retryRequest(async () => {
+                try {
+                    const result = await axios.post<BlockTimeResponse>(
+                        this.getFullUrl(),
+                        {
+                            jsonrpc: '2.0',
+                            id: 1,
+                            method: 'getBlockTime',
+                            params: [slot]
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 10000
+                        }
+                    );
+
+                    if (result.data.error) {
+                        throw new Error(`RPC Error: ${result.data.error.message}`);
+                    }
+
+                    return result.data;
+                } catch (error) {
+                    if (error && typeof error === 'object' && 'isAxiosError' in error) {
+                        const axiosError = error as any;
+                        console.error('[RPCService] Network error getting block time:', {
+                            code: axiosError.code,
+                            message: axiosError.message,
+                            response: axiosError.response?.data,
+                            status: axiosError.response?.status
+                        });
+                    }
+                    throw error;
+                }
+            });
+
+            console.log('[RPCService] Successfully got block time:', response.result);
+            return response.result;
+        } catch (error) {
+            console.error('[RPCService] Error getting block time:', error);
+            throw error;
+        }
+    }
+
+    async getTokenAccountsByOwner(
+        owner: string,
+        programId: string = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+        encoding: 'jsonParsed' | 'base58' | 'base64' = 'jsonParsed'
+    ): Promise<TokenAccountsResponse> {
+        try {
+            console.log('[RPCService] Getting token accounts by owner...', { owner, programId, encoding });
+            
+            const response = await this.retryRequest(async () => {
+                const result = await axios.post<RPCResponse<TokenAccountsResponse>>(
+                    this.getFullUrl(),
+                    {
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getTokenAccountsByOwner',
+                        params: [
+                            owner,
+                            {
+                                programId: programId
+                            },
+                            {
+                                encoding: encoding
+                            }
+                        ]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: this.timeout
+                    }
+                );
+
+                console.log('[RPCService] Raw RPC response:', JSON.stringify(result.data, null, 2));
+
+                if (result.data.error) {
+                    throw new Error(`RPC Error: ${result.data.error.message}`);
+                }
+
+                if (!result.data.result) {
+                    console.warn('[RPCService] No result in RPC response');
+                    return {
+                        context: {
+                            apiVersion: 'unknown',
+                            slot: 0
+                        },
+                        value: []
+                    };
+                }
+
+                return result.data.result;
+            });
+
+            console.log('[RPCService] Successfully got token accounts:', {
+                count: response.value.length,
+                slot: response.context.slot,
+                accounts: response.value.map(acc => ({
+                    pubkey: acc.pubkey,
+                    mint: acc.account.data.parsed.info.mint,
+                    amount: acc.account.data.parsed.info.tokenAmount.uiAmountString
+                }))
+            });
+            return response;
+        } catch (error) {
+            console.error('[RPCService] Error getting token accounts:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                code: (error as any)?.code,
+                type: error instanceof Error ? error.constructor.name : typeof error,
+                stack: error instanceof Error ? error.stack : undefined
+            });
+            
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
+                } else if (error.message.includes('ENETUNREACH')) {
+                    throw new Error('Network error. Unable to reach the RPC node. Please check your internet connection.');
+                }
+            }
+            throw error;
+        }
+    }
+
+    async getTokenSupply(mint: string): Promise<TokenSupplyResponse> {
+        try {
+            console.log('[RPCService] Getting token supply...', { mint });
+            
+            const response = await this.retryRequest(async () => {
+                const result = await axios.post<RPCResponse<TokenSupplyResponse>>(
+                    this.getFullUrl(),
+                    {
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getTokenSupply',
+                        params: [mint]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: this.timeout
+                    }
+                );
+
+                if (result.data.error) {
+                    throw new Error(`RPC Error: ${result.data.error.message}`);
+                }
+
+                return result.data.result;
+            });
+
+            console.log('[RPCService] Successfully got token supply:', {
+                amount: response.value.amount,
+                decimals: response.value.decimals,
+                uiAmount: response.value.uiAmount,
+                slot: response.context.slot
+            });
+            return response;
+        } catch (error) {
+            console.error('[RPCService] Error getting token supply:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                code: (error as any)?.code,
+                type: error instanceof Error ? error.constructor.name : typeof error
+            });
+            
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
+                } else if (error.message.includes('ENETUNREACH')) {
+                    throw new Error('Network error. Unable to reach the RPC node. Please check your internet connection.');
+                }
+            }
+            throw error;
+        }
     }
 }
 

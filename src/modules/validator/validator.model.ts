@@ -1,6 +1,10 @@
-import { ValidatorPerformance, ValidatorStats } from './validator.schema';
+import { ValidatorPerformance, ValidatorStats, TokenAccountsResponse } from './validator.schema';
 import { rpcService } from '../../services/rpc.service';
 import type { SignatureStatus } from '../../services/rpc.service';
+import type { TransactionResult } from './validator.schema';
+import { rpcService as newRpcService } from '../../services/rpc.service';
+import type { PrioritizationFee } from './validator.schema';
+import type { TokenSupplyResponse } from './validator.schema';
 
 export class ValidatorModel {
     private static cache: {
@@ -209,6 +213,151 @@ export class ValidatorModel {
                 throw new Error(`Failed to get signature statuses: ${error.message}`);
             }
             throw new Error('Failed to get signature statuses: Unknown error');
+        }
+    }
+
+    static async getTransaction(signature: string, encoding: 'json' | 'base58' | 'base64' = 'json'): Promise<TransactionResult> {
+        try {
+            console.log('[ValidatorModel] Getting transaction...', { 
+                signature,
+                encoding
+            });
+            
+            const transaction = await rpcService.getTransaction(signature, encoding);
+            
+            if (!transaction) {
+                console.log('[ValidatorModel] Transaction not found:', { signature });
+                return {
+                    data: null,
+                    pagination: {
+                        total: 0,
+                        page: 1,
+                        limit: 1,
+                        totalPages: 0
+                    }
+                };
+            }
+
+            const status = {
+                slot: transaction.slot,
+                hasTransaction: !!transaction.transaction,
+                hasMeta: !!transaction.meta,
+                metaError: transaction.meta?.err,
+                fee: transaction.meta?.fee,
+                signatures: transaction.transaction?.signatures?.length || 0
+            };
+
+            console.log('[ValidatorModel] Successfully got transaction:', status);
+            
+            return {
+                data: transaction,
+                pagination: {
+                    total: 1,
+                    page: 1,
+                    limit: 1,
+                    totalPages: 1
+                }
+            };
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting transaction:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                signature,
+                stack: error instanceof Error ? error.stack : undefined
+            });
+            
+            // Re-throw the error with additional context
+            if (error instanceof Error) {
+                throw new Error(`Failed to get transaction: ${error.message}`);
+            }
+            throw new Error('Failed to get transaction: Unknown error');
+        }
+    }
+
+    static async getRecentPrioritizationFees(accounts?: string[]): Promise<PrioritizationFee[]> {
+        try {
+            console.log('[ValidatorModel] Getting recent prioritization fees...', { accounts });
+            const fees = await newRpcService.getRecentPrioritizationFees(accounts);
+            console.log('[ValidatorModel] Successfully got prioritization fees:', fees);
+            
+            // Transform the RPC response to match our schema type
+            return fees.map(fee => ({
+                slot: fee.slot,
+                prioritizationFee: fee.fee
+            }));
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting prioritization fees:', error);
+            throw error;
+        }
+    }
+
+    static async getSlot(commitment: 'processed' | 'confirmed' | 'finalized' = 'finalized'): Promise<number> {
+        try {
+            console.log('[ValidatorModel] Getting current slot...', { commitment });
+            const slot = await newRpcService.getSlot(commitment);
+            console.log('[ValidatorModel] Successfully got slot:', slot);
+            return slot;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting slot:', error);
+            throw error;
+        }
+    }
+
+    static async getBlockTime(slot: number): Promise<number | null> {
+        try {
+            console.log('[ValidatorModel] Getting block time...', { slot });
+            const blockTime = await newRpcService.getBlockTime(slot);
+            console.log('[ValidatorModel] Successfully got block time:', blockTime);
+            return blockTime;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting block time:', error);
+            throw error;
+        }
+    }
+
+    static async getTokenAccountsByOwner(
+        owner: string,
+        programId?: string,
+        encoding: 'jsonParsed' | 'base58' | 'base64' = 'jsonParsed'
+    ): Promise<TokenAccountsResponse> {
+        try {
+            console.log('[ValidatorModel] Getting token accounts by owner...', { owner, programId, encoding });
+            const response = await rpcService.getTokenAccountsByOwner(owner, programId, encoding);
+            console.log('[ValidatorModel] Successfully got token accounts:', {
+                count: response.value.length,
+                slot: response.context.slot,
+                accounts: response.value.map(acc => ({
+                    pubkey: acc.pubkey,
+                    mint: acc.account.data.parsed.info.mint,
+                    amount: acc.account.data.parsed.info.tokenAmount.uiAmountString
+                }))
+            });
+            return response;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting token accounts:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined
+            });
+            throw error;
+        }
+    }
+
+    static async getTokenSupply(mint: string): Promise<TokenSupplyResponse> {
+        try {
+            console.log('[ValidatorModel] Getting token supply...', { mint });
+            const response = await rpcService.getTokenSupply(mint);
+            console.log('[ValidatorModel] Successfully got token supply:', {
+                amount: response.value.amount,
+                decimals: response.value.decimals,
+                uiAmount: response.value.uiAmount,
+                slot: response.context.slot
+            });
+            return response;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting token supply:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined
+            });
+            throw error;
         }
     }
 }
