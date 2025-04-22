@@ -218,6 +218,89 @@ interface RPCVersionResponse {
     feature_set: number;
 }
 
+interface StakeMinimumDelegationResponse {
+    jsonrpc: string;
+    id: number;
+    result: {
+        context: {
+            slot: number;
+        };
+        value: number;
+    };
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+interface LargestAccount {
+    lamports: number;
+    address: string;
+}
+
+interface LargestAccountsResponse {
+    jsonrpc: string;
+    id: number;
+    result: {
+        context: {
+            slot: number;
+        };
+        value: LargestAccount[];
+    };
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+interface LeaderScheduleResponse {
+    jsonrpc: string;
+    id: number;
+    result: {
+        [key: string]: number[];
+    } | null;
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+interface SlotLeadersResponse {
+    jsonrpc: string;
+    id: number;
+    result: string[];
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
+export interface SignatureStatus {
+    slot: number;
+    confirmations: number | null;
+    err: any | null;
+    status: {
+        Ok: null;
+    } | {
+        Err: any;
+    } | null;
+}
+
+interface SignatureStatusesResponse {
+    jsonrpc: string;
+    id: number;
+    result: {
+        context: {
+            slot: number;
+        };
+        value: (SignatureStatus | null)[];
+    };
+    error?: {
+        code: number;
+        message: string;
+    };
+}
+
 class RPCService extends EventEmitter {
     private readonly rpcUrl: string;
     private readonly apiKey: string;
@@ -627,35 +710,20 @@ class RPCService extends EventEmitter {
     private async retryRequest<T>(
         requestFn: () => Promise<T>,
         retryCount = 0,
-        maxRetries = 5,
-        baseDelay = 2000
+        maxRetries = 3,
+        baseDelay = 1000
     ): Promise<T> {
         try {
             return await requestFn();
         } catch (error) {
-            console.error(`[RPC] Request attempt ${retryCount + 1} failed:`, {
-                error: error instanceof Error ? error.message : 'Unknown error',
-                code: (error as any)?.code,
-                type: error instanceof Error ? error.constructor.name : typeof error
-            });
-            
-            if (retryCount < maxRetries - 1) {
-                // Exponential backoff with jitter
-                const delay = Math.min(
-                    30000, // Max delay of 30 seconds
-                    baseDelay * Math.pow(2, retryCount) * (0.5 + Math.random())
-                );
-                
-                console.log(`[RPC] Retrying in ${Math.round(delay)}ms... (attempt ${retryCount + 2}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.retryRequest(requestFn, retryCount + 1, maxRetries, baseDelay);
+            if (retryCount >= maxRetries) {
+                throw error;
             }
 
-            // Enhance error message for timeouts
-            if (error instanceof Error && error.message.includes('ETIMEDOUT')) {
-                throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
-            }
-            throw error;
+            const delay = Math.min(baseDelay * Math.pow(2, retryCount), 10000);
+            console.log(`[RPC] Request failed, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return this.retryRequest(requestFn, retryCount + 1, maxRetries, baseDelay);
         }
     }
 
@@ -1245,6 +1313,263 @@ class RPCService extends EventEmitter {
             });
             throw error;
         }
+    }
+
+    async getStakeMinimumDelegation(): Promise<number> {
+        try {
+            console.log('[RPC] Getting stake minimum delegation...');
+            const response = await axios.post<StakeMinimumDelegationResponse>(
+                this.getFullUrl(),
+                {
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'getStakeMinimumDelegation',
+                    params: [{
+                        commitment: 'finalized'
+                    }]
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (response.data.error) {
+                throw new Error(response.data.error.message);
+            }
+
+            console.log('[RPC] Successfully got stake minimum delegation:', response.data.result.value);
+            return response.data.result.value;
+        } catch (error) {
+            console.error('[RPC] Error getting stake minimum delegation:', error);
+            throw error;
+        }
+    }
+
+    async getLargestAccounts(params?: { commitment?: string; filter?: string }): Promise<LargestAccount[]> {
+        try {
+            console.log('[RPC] Getting largest accounts...');
+            throw new Error('getLargestAccounts is not supported by this RPC endpoint. Please contact Helius support for access to this method.');
+        } catch (error) {
+            console.error('[RPC] Error getting largest accounts:', error);
+            throw error;
+        }
+    }
+
+    async getLeaderSchedule(epoch?: number): Promise<{ [key: string]: number[] } | null> {
+        return this.retryRequest(async () => {
+            try {
+                console.log('[RPC] Getting leader schedule...', { epoch });
+                const response = await axios.post<LeaderScheduleResponse>(
+                    this.getFullUrl(),
+                    {
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getLeaderSchedule',
+                        params: [epoch]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 10000 // 10 second timeout
+                    }
+                );
+
+                if (response.data.error) {
+                    throw new Error(response.data.error.message);
+                }
+
+                console.log('[RPC] Successfully got leader schedule:', response.data.result);
+                return response.data.result;
+            } catch (error) {
+                console.error('[RPC] Error getting leader schedule:', error);
+                throw error;
+            }
+        });
+    }
+
+    async getSlotLeaders(startSlot: number, limit: number): Promise<string[]> {
+        try {
+            console.log('[RPCService] Getting slot leaders...', { startSlot, limit });
+            
+            // Get current slot first with retry
+            const currentSlotResponse = await this.retryRequest(async () => {
+                try {
+                    const result = await axios.post<{ jsonrpc: string; id: number; result: number }>(
+                        this.getFullUrl(),
+                        {
+                            jsonrpc: '2.0',
+                            id: 1,
+                            method: 'getSlot',
+                            params: [{ commitment: 'finalized' }]
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 10000 // 10 second timeout
+                        }
+                    );
+                    return result.data;
+                } catch (error) {
+                    if (error && typeof error === 'object' && 'isAxiosError' in error) {
+                        const axiosError = error as any;
+                        console.error('[RPCService] Network error getting current slot:', {
+                            code: axiosError.code,
+                            message: axiosError.message,
+                            response: axiosError.response?.data,
+                            status: axiosError.response?.status
+                        });
+                    }
+                    throw error;
+                }
+            });
+
+            const currentSlot = currentSlotResponse.result;
+            console.log('[RPCService] Current slot:', currentSlot);
+            
+            // Calculate valid slot range
+            const maxSlotsInPast = 432000; // Roughly one epoch
+            const validStartSlot = Math.max(currentSlot - maxSlotsInPast, 0);
+            
+            // If no start slot provided, use the valid range
+            const actualStartSlot = startSlot || validStartSlot;
+            
+            // Validate slot range
+            if (actualStartSlot >= currentSlot) {
+                throw new Error(`Invalid slot range: start slot ${actualStartSlot} must be less than current slot ${currentSlot}`);
+            }
+            
+            if (currentSlot - actualStartSlot > maxSlotsInPast) {
+                throw new Error(`Invalid slot range: requested slots are too far in the past. Maximum allowed is ${maxSlotsInPast} slots. Valid range is ${validStartSlot} to ${currentSlot - 1}`);
+            }
+
+            // Get slot leaders with retry
+            const slotLeadersResponse = await this.retryRequest(async () => {
+                try {
+                    const result = await axios.post<SlotLeadersResponse>(
+                        this.getFullUrl(),
+                        {
+                            jsonrpc: '2.0',
+                            id: 1,
+                            method: 'getSlotLeaders',
+                            params: [actualStartSlot, limit]
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 10000 // 10 second timeout
+                        }
+                    );
+                    return result.data;
+                } catch (error) {
+                    if (error && typeof error === 'object' && 'isAxiosError' in error) {
+                        const axiosError = error as any;
+                        console.error('[RPCService] Network error getting slot leaders:', {
+                            code: axiosError.code,
+                            message: axiosError.message,
+                            response: axiosError.response?.data,
+                            status: axiosError.response?.status
+                        });
+                    }
+                    throw error;
+                }
+            });
+
+            if (slotLeadersResponse.error) {
+                throw new Error(`RPC Error: ${slotLeadersResponse.error.message}`);
+            }
+
+            console.log('[RPCService] Successfully got slot leaders:', slotLeadersResponse.result);
+            return slotLeadersResponse.result;
+        } catch (error: unknown) {
+            console.error('[RPCService] Error getting slot leaders:', error);
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
+                } else if (error.message.includes('ENETUNREACH')) {
+                    throw new Error('Network error. Unable to reach the RPC node. Please check your internet connection.');
+                }
+            }
+            throw error;
+        }
+    }
+
+    async getSignatureStatuses(signatures: string[], searchTransactionHistory = true): Promise<(SignatureStatus | null)[]> {
+        const maxRetries = 3;
+        const baseDelay = 1000; // 1 second
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log('[RPCService] Getting signature statuses...', { signatures, searchTransactionHistory, attempt });
+                const response = await this.retryRequest(async () => {
+                    try {
+                        const result = await axios.post<SignatureStatusesResponse>(
+                            this.getFullUrl(),
+                            {
+                                jsonrpc: '2.0',
+                                id: 1,
+                                method: 'getSignatureStatuses',
+                                params: [
+                                    signatures,
+                                    {
+                                        searchTransactionHistory
+                                    }
+                                ]
+                            },
+                            {
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                timeout: 10000 // 10 second timeout
+                            }
+                        );
+                        return result.data;
+                    } catch (error) {
+                        if (error && typeof error === 'object' && 'isAxiosError' in error) {
+                            const axiosError = error as any;
+                            console.error('[RPCService] Network error getting signature statuses:', {
+                                code: axiosError.code,
+                                message: axiosError.message,
+                                response: axiosError.response?.data,
+                                status: axiosError.response?.status
+                            });
+                        }
+                        throw error;
+                    }
+                });
+
+                if (response.error) {
+                    throw new Error(`RPC Error: ${response.error.message}`);
+                }
+
+                console.log('[RPCService] Successfully got signature statuses:', response.result);
+                return response.result.value;
+            } catch (error: unknown) {
+                console.error(`[RPCService] Error getting signature statuses (attempt ${attempt}/${maxRetries}):`, error);
+                
+                if (attempt === maxRetries) {
+                    if (error instanceof Error) {
+                        if (error.message.includes('ETIMEDOUT')) {
+                            throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
+                        } else if (error.message.includes('ENETUNREACH')) {
+                            throw new Error('Network error. Unable to reach the RPC node. Please check your internet connection.');
+                        }
+                    }
+                    throw error;
+                }
+
+                // Calculate exponential backoff delay
+                const delay = baseDelay * Math.pow(2, attempt - 1);
+                console.log(`[RPCService] Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        throw new Error('Failed to get signature statuses after all retry attempts');
     }
 }
 

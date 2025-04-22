@@ -1,5 +1,6 @@
 import { ValidatorPerformance, ValidatorStats } from './validator.schema';
 import { rpcService } from '../../services/rpc.service';
+import type { SignatureStatus } from '../../services/rpc.service';
 
 export class ValidatorModel {
     private static cache: {
@@ -83,5 +84,131 @@ export class ValidatorModel {
 
     static clearCache(): void {
         this.cache = {};
+    }
+
+    static async getStakeMinimumDelegation(): Promise<number> {
+        try {
+            console.log('[ValidatorModel] Getting stake minimum delegation...');
+            const minimumDelegation = await rpcService.getStakeMinimumDelegation();
+            console.log('[ValidatorModel] Successfully got stake minimum delegation:', minimumDelegation);
+            return minimumDelegation;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting stake minimum delegation:', error);
+            throw error;
+        }
+    }
+
+    static async getLargestAccounts(params?: { commitment?: string; filter?: string }): Promise<{ lamports: number; address: string }[]> {
+        try {
+            console.log('[ValidatorModel] Getting largest accounts...');
+            const accounts = await rpcService.getLargestAccounts(params);
+            console.log('[ValidatorModel] Successfully got largest accounts:', accounts);
+            return accounts;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting largest accounts:', error);
+            throw error;
+        }
+    }
+
+    static async getLeaderSchedule(epoch?: number, page = 1, limit = 20): Promise<{
+        data: { [key: string]: number[] } | null;
+        pagination: {
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
+        };
+    }> {
+        try {
+            console.log('[ValidatorModel] Getting leader schedule...', { epoch, page, limit });
+            const schedule = await rpcService.getLeaderSchedule(epoch);
+            
+            if (!schedule) {
+                return {
+                    data: null,
+                    pagination: {
+                        total: 0,
+                        page,
+                        limit,
+                        totalPages: 0
+                    }
+                };
+            }
+
+            // Convert schedule object to array for pagination
+            const entries = Object.entries(schedule);
+            const total = entries.length;
+            const totalPages = Math.ceil(total / limit);
+            
+            // Calculate pagination
+            const startIndex = (page - 1) * limit;
+            const endIndex = Math.min(startIndex + limit, total);
+            
+            // Get paginated data
+            const paginatedEntries = entries.slice(startIndex, endIndex);
+            const paginatedSchedule = Object.fromEntries(paginatedEntries);
+
+            console.log('[ValidatorModel] Successfully got leader schedule:', {
+                total,
+                page,
+                limit,
+                totalPages
+            });
+
+            return {
+                data: paginatedSchedule,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages
+                }
+            };
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting leader schedule:', error);
+            throw error;
+        }
+    }
+
+    static async getSlotLeaders(startSlot: number, limit: number): Promise<string[]> {
+        try {
+            console.log('[ValidatorModel] Getting slot leaders...', { startSlot, limit });
+            const leaders = await rpcService.getSlotLeaders(startSlot, limit);
+            console.log('[ValidatorModel] Successfully got slot leaders:', leaders);
+            return leaders;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting slot leaders:', error);
+            throw error;
+        }
+    }
+
+    static async getSignatureStatuses(signatures: string[], searchTransactionHistory = true): Promise<(SignatureStatus | null)[]> {
+        try {
+            console.log('[ValidatorModel] Getting signature statuses...', { 
+                signatureCount: signatures.length,
+                searchTransactionHistory,
+                signatures: signatures.slice(0, 3) // Log first 3 signatures for debugging
+            });
+            
+            const statuses = await rpcService.getSignatureStatuses(signatures, searchTransactionHistory);
+            
+            console.log('[ValidatorModel] Successfully got signature statuses:', {
+                total: statuses.length,
+                nonNull: statuses.filter(s => s !== null).length
+            });
+            
+            return statuses;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting signature statuses:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                signatures: signatures.slice(0, 3) // Log first 3 signatures for debugging
+            });
+            
+            // Re-throw the error with additional context
+            if (error instanceof Error) {
+                throw new Error(`Failed to get signature statuses: ${error.message}`);
+            }
+            throw new Error('Failed to get signature statuses: Unknown error');
+        }
     }
 }
