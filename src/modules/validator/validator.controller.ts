@@ -1,6 +1,22 @@
 import { Request, Response } from 'express';
-import { ValidatorFilters } from './validator.schema';
 import { ValidatorModel } from './validator.model';
+import { 
+    ValidatorStats, 
+    ValidatorPerformance,
+    ValidatorFilters,
+    Transaction,
+    TransactionResponse,
+    TransactionPagination,
+    TransactionResult,
+    PrioritizationFee,
+    PrioritizationFeesResponse,
+    SlotResponse,
+    BlockTimeResponse,
+    TokenAccountsResponse,
+    TokenSupplyResponse,
+    MultipleAccountsResponse,
+    SignatureSubscribeParams
+} from './validator.schema';
 
 export class ValidatorController {
     async getValidatorStats(req: Request, res: Response) {
@@ -527,6 +543,100 @@ export class ValidatorController {
                     message: errorMessage
                 }
             });
+        }
+    }
+
+    async getMultipleAccounts(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[ValidatorController] Getting multiple accounts...');
+            const { pubkeys } = req.query;
+            
+            if (!pubkeys || typeof pubkeys !== 'string') {
+                res.status(400).json({
+                    error: 'Missing or invalid pubkeys parameter'
+                });
+                return;
+            }
+
+            const pubkeyList = pubkeys.split(',');
+            const result = await ValidatorModel.getMultipleAccounts(pubkeyList);
+            
+            console.log('[ValidatorController] Successfully got multiple accounts:', {
+                count: result.value.length,
+                nonNull: result.value.filter(acc => acc !== null).length,
+                slot: result.context.slot
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[ValidatorController] Error getting multiple accounts:', error);
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    res.status(504).json({
+                        error: 'Request timed out. Please try again later.'
+                    });
+                } else if (error.message.includes('ENETUNREACH')) {
+                    res.status(503).json({
+                        error: 'Network error. Please check your internet connection.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: error.message
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async subscribeToSignature(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[ValidatorController] Subscribing to signature...');
+            const { signature, commitment, enableReceivedNotification } = req.query;
+            
+            if (!signature || typeof signature !== 'string') {
+                res.status(400).json({
+                    error: 'Missing or invalid signature parameter'
+                });
+                return;
+            }
+
+            const params: SignatureSubscribeParams = {
+                commitment: commitment as 'processed' | 'confirmed' | 'finalized' | undefined,
+                enableReceivedNotification: enableReceivedNotification === 'true'
+            };
+
+            const subscriptionId = await ValidatorModel.subscribeToSignature(signature, params);
+            
+            console.log('[ValidatorController] Successfully subscribed to signature:', {
+                signature,
+                subscriptionId
+            });
+
+            res.json({
+                subscriptionId,
+                signature
+            });
+        } catch (error) {
+            console.error('[ValidatorController] Error subscribing to signature:', error);
+            if (error instanceof Error) {
+                if (error.message.includes('WebSocket connection not ready')) {
+                    res.status(503).json({
+                        error: 'WebSocket connection not ready. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: error.message
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
         }
     }
 }

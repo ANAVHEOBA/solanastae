@@ -76,17 +76,11 @@ interface InflationReward {
 }
 
 interface AccountInfo {
-    context: {
-        apiVersion: string;
-        slot: number;
-    };
-    value: {
-        data: string | null;
-        executable: boolean;
-        lamports: number;
-        owner: string;
-        rentEpoch: number;
-    } | null;
+    data: string | null;
+    executable: boolean;
+    lamports: number;
+    owner: string;
+    rentEpoch: number;
 }
 
 interface AccountInfoParams {
@@ -397,6 +391,19 @@ interface TokenSupplyResponse {
     };
 }
 
+interface MultipleAccountsResponse {
+    context: {
+        apiVersion: string;
+        slot: number;
+    };
+    value: (AccountInfo | null)[];
+}
+
+interface SignatureSubscribeParams {
+    commitment?: 'processed' | 'confirmed' | 'finalized';
+    enableReceivedNotification?: boolean;
+}
+
 class RPCService extends EventEmitter {
     private readonly rpcUrl: string;
     private readonly apiKey: string;
@@ -404,7 +411,7 @@ class RPCService extends EventEmitter {
     private readonly timeout = 30000; // 30 seconds
     private readonly httpsAgent: https.Agent;
     private ws: WebSocket | null = null;
-    private subscriptions: Map<number, { type: 'account' | 'vote' | 'slot', pubkey?: string }> = new Map();
+    private subscriptions: Map<number, { type: 'account' | 'vote' | 'slot' | 'signature', pubkey?: string, signature?: string }> = new Map();
     private nextSubscriptionId = 1;
     private reconnectAttempts = 0;
 
@@ -2039,6 +2046,111 @@ class RPCService extends EventEmitter {
             }
             throw error;
         }
+    }
+
+    async getMultipleAccounts(pubkeys: string[]): Promise<MultipleAccountsResponse> {
+        try {
+            console.log('[RPCService] Getting multiple accounts...', { pubkeys });
+            
+            const response = await this.retryRequest(async () => {
+                const result = await axios.post<RPCResponse<MultipleAccountsResponse>>(
+                    this.getFullUrl(),
+                    {
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getMultipleAccounts',
+                        params: [pubkeys]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': '*/*',
+                            'Connection': 'keep-alive'
+                        },
+                        timeout: this.timeout
+                    }
+                );
+
+                if (result.data.error) {
+                    console.error('[RPCService] RPC Error:', result.data.error);
+                    throw new Error(`RPC Error: ${result.data.error.message}`);
+                }
+
+                return result.data.result;
+            });
+
+            console.log('[RPCService] Successfully got multiple accounts:', {
+                count: response.value.length,
+                nonNull: response.value.filter(acc => acc !== null).length,
+                slot: response.context.slot
+            });
+            return response;
+        } catch (error) {
+            console.error('[RPCService] Error getting multiple accounts:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                code: (error as any)?.code,
+                type: error instanceof Error ? error.constructor.name : typeof error,
+                stack: error instanceof Error ? error.stack : undefined
+            });
+            
+            if (error instanceof Error) {
+                if (error.message.includes('ETIMEDOUT')) {
+                    throw new Error('Request timed out. The RPC node is taking too long to respond. Please try again later.');
+                } else if (error.message.includes('ENETUNREACH')) {
+                    throw new Error('Network error. Unable to reach the RPC node. Please check your internet connection.');
+                }
+            }
+            throw error;
+        }
+    }
+
+    async subscribeToSignature(signature: string, params?: SignatureSubscribeParams): Promise<number> {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            throw new Error('WebSocket connection not ready');
+        }
+
+        const subscriptionId = this.nextSubscriptionId++;
+        const request = {
+            jsonrpc: '2.0',
+            id: subscriptionId,
+            method: 'signatureSubscribe',
+            params: [
+                signature,
+                {
+                    commitment: params?.commitment || 'finalized',
+                    enableReceivedNotification: params?.enableReceivedNotification || false
+                }
+            ]
+        };
+
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Subscription request timed out'));
+            }, this.timeout);
+
+            const messageHandler = (data: string) => {
+                try {
+                    const response = JSON.parse(data);
+                    if (response.id === subscriptionId) {
+                        clearTimeout(timeout);
+                        this.ws!.removeListener('message', messageHandler);
+
+                        if (response.error) {
+                            reject(new Error(response.error.message));
+                            return;
+                        }
+
+                        this.subscriptions.set(response.result, { type: 'signature', signature });
+                        resolve(response.result);
+                    }
+                } catch (error) {
+                    console.error('[RPC] Error processing subscription response:', error);
+                }
+            };
+
+            this.ws!.on('message', messageHandler);
+            this.ws!.send(JSON.stringify(request));
+        });
     }
 }
 

@@ -5,6 +5,10 @@ import type { TransactionResult } from './validator.schema';
 import { rpcService as newRpcService } from '../../services/rpc.service';
 import type { PrioritizationFee } from './validator.schema';
 import type { TokenSupplyResponse } from './validator.schema';
+import type { MultipleAccountsResponse } from './validator.schema';
+import type { WebSocket as WS } from 'ws';
+import { Request, Response } from 'express';
+import { ValidatorFilters, Transaction, TransactionResponse, TransactionPagination, PrioritizationFeesResponse, SlotResponse, BlockTimeResponse, SignatureSubscribeParams } from './validator.schema';
 
 export class ValidatorModel {
     private static cache: {
@@ -12,6 +16,15 @@ export class ValidatorModel {
         stats?: ValidatorStats;
         lastUpdated?: number;
     } = {};
+
+    private static ws: WS | null = null;
+    private static reconnectAttempts = 0;
+    private static maxReconnectAttempts = 5;
+    private static reconnectDelay = 1000;
+    private static pingInterval: NodeJS.Timeout | null = null;
+    private static pingTimeout: NodeJS.Timeout | null = null;
+    private static readonly PING_INTERVAL = 30000;
+    private static readonly PING_TIMEOUT = 10000;
 
     private static CACHE_TTL = 60 * 1000; // 1 minute cache
 
@@ -357,6 +370,34 @@ export class ValidatorModel {
                 error: error instanceof Error ? error.message : 'Unknown error',
                 stack: error instanceof Error ? error.stack : undefined
             });
+            throw error;
+        }
+    }
+
+    static async getMultipleAccounts(pubkeys: string[]): Promise<MultipleAccountsResponse> {
+        try {
+            console.log('[ValidatorModel] Getting multiple accounts...', { pubkeys });
+            const result = await rpcService.getMultipleAccounts(pubkeys);
+            console.log('[ValidatorModel] Successfully got multiple accounts:', {
+                count: result.value.length,
+                nonNull: result.value.filter(acc => acc !== null).length,
+                slot: result.context.slot
+            });
+            return result;
+        } catch (error) {
+            console.error('[ValidatorModel] Error getting multiple accounts:', error);
+            throw error;
+        }
+    }
+
+    static async subscribeToSignature(signature: string, params?: SignatureSubscribeParams): Promise<number> {
+        try {
+            console.log('[ValidatorModel] Subscribing to signature...', { signature, params });
+            const subscriptionId = await rpcService.subscribeToSignature(signature, params);
+            console.log('[ValidatorModel] Successfully subscribed to signature:', { signature, subscriptionId });
+            return subscriptionId;
+        } catch (error) {
+            console.error('[ValidatorModel] Error subscribing to signature:', error);
             throw error;
         }
     }

@@ -109,3 +109,34 @@ a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/validators/transacti
 
 a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/validators/prioritization-fees?limit=5"
 {"jsonrpc":"2.0","id":1,"result":{"data":[{"slot":335155143},{"slot":335155144},{"slot":335155145},{"slot":335155146},{"slot":335155147},{"slot":335155148},{"slot":335155149},{"slot":335155150},{"slot":335155151},{"slot":335155152},{"slot":335155153},{"slot":335155154},{"slot":335155155},{"slot":335155156},{"slot":335155157},{"slot":335155158},{"slot":335155159},{"slot":335155160},{"slot":335155161},{"slot":335155162},{"slot":335155163},{"slot":335155164},{"slot":335155165},{"slot":335155166},{"slot":335155167},{"slot":335155168},{"slot":335155169},{"slot":335155170},{"slot":335155171},{"slot":335155172},{"slot":335155173},{"slot":335155174},{"slot":335155175},{"slot":335155176},{"slot":335155177},{"slot":335155178},{"slot":335155179},{"slot":335155180},{"slot":335155181},{"slot":335155182},{"slot":335155183},{"slot":335155184},{"slot":335155185},{"slot":335155186},{"slot":335155187},{"slot":335155188},{"slot":335155189},{"slot":335155190},{"slot":335155191},{"slot":335155192},{"slot":335155193},{"slot":335155194},{"slot":335155195},{"slot":335155196},{"slot":335155197},{"slot":335155198},{"slot":335155199},{"slot":335155200},{"slot":335155201},{"slot":335155202},{"slot":335155203},{"slot":335155204},{"slot":335155205},{"slot":335155206},{"slot":335155207},{"slot":335155208},{"slot":335155209},{"slot":335155210},{"slot":335155211},{"slot":335155212},{"slot":335155213},{"slot":335155214},{"slot":335155215},{"slot":335155216},{"slot":335155217},{"slot":335155218},{"slot":335155219},{"slot":335155220},{"slot":335155221},{"slot":335155222},{"slot":335155223},{"slot":335155224},{"slot":335155225},{"slot":335155226},{"slot":335155227},{"slot":335155228},{"slot":335155229},{"slot":335155230},{"slot":335155231},{"slot":335155232},{"slot":335155233},{"slot":335155234},{"slot":335155235},{"slot":335155236},{"slot":335155237},{"slot":335155238},{"slot":335155239},{"slot":335155240},{"slot":335155241},{"slot":335155242},{"slot":335155243},{"slot":335155244},{"slot":335155245},{"slot":335155246},{"slot":335155247},{"slot":335155248},{"slot":335155249},{"slot":335155250},{"slot":335155251},{"slot":335155252},{"slot":335155253},{"slot":335155254},{"slot":335155255},{"slot":335155256},{"slot":335155257},{"slot":335155258},{"slot":335155259},{"slot":335155260},{"slot":335155261},{"slot":335155262},{"slot":335155263},{"slot":335155264},{"slot":335155265},{"slot":335155266},{"slot":335155267},{"slot":335155268},{"slot":335155269},{"slot":335155270},{"slot":335155271},{"slot":335155272},{"slot":335155273},{"slot":335155274},{"slot":335155275},{"slot":335155276},{"slot":335155277},{"slot":335155278},{"slot":335155279},{"slot":335155280},{"slot":335155281},{"slot":335155282},{"slot":335155283},{"slot":335155284},{"slot":335155285},{"slot":335155286},{"slot":335155287},{"slot":335155288},{"slot":335155289},{"slot":335155290},{"slot":335155291},{"slot":335155292}],"pagination":{"total":150,"page":1,"limit":5,"totalPages":30}}}a@a:~/solanastae$ 
+
+
+
+
+
+
+
+
+
+a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/validators/token-supply?mint=3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"
+{"jsonrpc":"2.0","id":1,"error":{"code":500,"message":"RPC Error: Invalid param: could not find account"}}a@a:~/solanastae$ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/valcurl -X GET "http://localhost:5000/api/v1/validators/multiple-accounts?pubkeys=vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg,4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"
+{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":335241687,"apiVersion":"2.1.9"},"value":[null,{"lamports":2000000,"data":["AQAAAAEAAAACtzNsyJrW0uarvPPgOKcw03SknUm0t2ogk9TDdisYLIMSyibeaiD1Q5FEyBTqzcZklp3nd4r4QjPAqveVlHKaiBMAAAAAAAA=","base64"],"owner":"11111111111111111111111111111111","executable":false,"rentEpoch":18446744073709552000,"space":80}]}}a@a:~/solanastae$ 

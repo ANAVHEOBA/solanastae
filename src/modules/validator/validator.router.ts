@@ -28,4 +28,8 @@ router.get('/token-accounts-by-owner', validatorController.getTokenAccountsByOwn
 
 router.get('/token-supply', validatorController.getTokenSupply.bind(validatorController));
 
+router.get('/multiple-accounts', validatorController.getMultipleAccounts.bind(validatorController));
+
+router.get('/signature-subscribe', validatorController.subscribeToSignature.bind(validatorController));
+
 export const validatorRouter = router;

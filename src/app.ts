@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { validatorRouter } from './modules/validator/validator.router';
 import { networkRouter } from './modules/network/network.router';
+import { solanaFMRouter } from './modules/solanafm/solanafm.router';
+import { solscanRouter } from './modules/solscan/solscan.router';
 import { errorMiddleware } from './middleware/error.middleware';
 import { rateLimit } from 'express-rate-limit';
 import { environment } from './config/environment';
@@ -31,6 +33,8 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/v1/validators', validatorRouter);
 app.use('/api/v1/network', networkRouter);
+app.use('/api/v1/solanafm', solanaFMRouter);
+app.use('/api/v1/solscan', solscanRouter);
 
 // 404 handler - needs to be before error handler
 app.use((req: Request, res: Response) => {

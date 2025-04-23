@@ -196,3 +196,33 @@ export interface TokenSupplyResponse {
         uiAmountString: string;
     };
 }
+
+export interface MultipleAccountsResponse {
+    context: {
+        apiVersion: string;
+        slot: number;
+    };
+    value: (AccountInfo | null)[];
+}
+
+export interface AccountInfo {
+    data: string | null;
+    executable: boolean;
+    lamports: number;
+    owner: string;
+    rentEpoch: number;
+}
+
+export interface SignatureSubscribeParams {
+    commitment?: 'processed' | 'confirmed' | 'finalized';
+    enableReceivedNotification?: boolean;
+}
+
+export interface SignatureNotification {
+    context: {
+        slot: number;
+    };
+    value: {
+        err: any | null;
+    } | 'receivedSignature';
+}
