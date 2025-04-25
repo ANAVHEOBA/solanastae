@@ -4,25 +4,28 @@ npm-debug.log
 yarn-debug.log
 yarn-error.log
 
+# Build output
+dist/
+build/
+
 # Environment variables
 .env
 .env.local
 .env.*.local
 
-# Build output
-dist/
-build/
-
-# IDE and editor files
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-.DS_Store
 
 # Logs
 logs/
 *.log
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Coverage directory
 coverage/
