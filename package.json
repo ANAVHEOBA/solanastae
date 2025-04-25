@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
-    "build": "rimraf dist && tsc && mkdir -p dist && cp -r src/config dist/config && cp -r src/middleware dist/middleware && cp -r src/modules dist/modules && cp -r src/services dist/services && cp -r src/utils dist/utils",
+    "build": "rimraf dist && tsc",
+    "postinstall": "npm run build",
     "clean": "rimraf dist",
     "lint": "eslint . --ext .ts",
     "test": "echo \"Error: no test specified\" && exit 1"
