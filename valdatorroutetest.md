@@ -32,8 +32,9 @@ a@a:~/solanastae$ curl http://localhost:5000/api/v1/validators/stats
 
 
 
-a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/validators/stake-minimum-delegation"   curl -X GET "http://localhost:5000/api/v1/validators/stake-minimum-delegation"
-{"jsonrpc":"2.0","id":1,"result":1}a@a:~/solanastae$ 
+a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/validators/stake-minimum-delegation"
+{"jsonrpc":"2.0","id":"1","result":{"context":{"slot":335810241},"value":1}}a@a:~/solanastae$ 
+
 
 
 

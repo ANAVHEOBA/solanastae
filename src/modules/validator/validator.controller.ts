@@ -111,25 +111,32 @@ export class ValidatorController {
         try {
             console.log('[ValidatorController] Getting stake minimum delegation...');
             const minimumDelegation = await ValidatorModel.getStakeMinimumDelegation();
-            console.log('[ValidatorController] Successfully got stake minimum delegation:', minimumDelegation);
+            
+            // Return in the correct format
             res.json({
-                jsonrpc: '2.0',
-                id: 1,
-                result: minimumDelegation
+                jsonrpc: "2.0",
+                id: "1",
+                result: {
+                    context: {
+                        slot: await ValidatorModel.getSlot() // Get current slot
+                    },
+                    value: minimumDelegation
+                }
             });
         } catch (error) {
             console.error('[ValidatorController] Error getting stake minimum delegation:', error);
             res.status(500).json({
-                jsonrpc: '2.0',
-                id: 1,
+                jsonrpc: "2.0",
+                id: "1",
                 error: {
                     code: 500,
-                    message: 'Failed to get stake minimum delegation'
+                    message: error instanceof Error ? error.message : 'Failed to get stake minimum delegation'
                 }
             });
         }
     }
 
+    
     async getLargestAccounts(req: Request, res: Response) {
         try {
             console.log('[ValidatorController] Getting largest accounts...');

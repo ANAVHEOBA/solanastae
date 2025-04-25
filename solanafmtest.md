@@ -49,3 +49,9 @@ a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/solanafm/actions"
 a@a:~/solanastae$ curl -X GET "http://localhost:5000/api/v1/solanafm/transfer/XYTAd8UQSiiuyD4FCFFxBcxpkFUWiJJBXpV5uSzZ4UthJKB1zCHtjzvwZkvvJDR12C4yQkQdequ2NkdXXUUmzJw"
 {"status":"success","message":"Retrieved Transactions Info","result":{"transactionHash":"XYTAd8UQSiiuyD4FCFFxBcxpkFUWiJJBXpV5uSzZ4UthJKB1zCHtjzvwZkvvJDR12C4yQkQdequ2NkdXXUUmzJw","data":[]}}a@a:~/solanastae$ 
 
+
+
+
+
+
+
