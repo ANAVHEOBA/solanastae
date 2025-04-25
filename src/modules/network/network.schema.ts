@@ -237,3 +237,23 @@ export interface VersionResponse {
 export interface HealthResponse {
     status: string;
 }
+
+export interface AccountInfo {
+    data: string | null;
+    executable: boolean;
+    lamports: number;
+    owner: string;
+    rentEpoch: number;
+}
+
+export interface ProgramAccount {
+    pubkey: string;
+    account: {
+        lamports: number;
+        owner: string;
+        data: [string, string];
+        executable: boolean;
+        rentEpoch: number;
+        space: number;
+    };
+}

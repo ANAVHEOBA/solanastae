@@ -1,0 +1,1 @@
+﻿//# sourceMappingURL=stake.schema.d.ts.map

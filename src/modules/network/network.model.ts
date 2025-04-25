@@ -1,5 +1,5 @@
 import { rpcService } from '../../services/rpc.service';
-import { EpochInfo, EpochInfoParams, NetworkStats, InflationRate, InflationReward, InflationRewardParams, AccountInfoParams, ProgramAccountsParams, BalanceResponse, TokenAccountBalance, AccountSubscribeParams, AccountSubscription, VoteSubscription, VoteNotification, SlotSubscription, SlotNotification, PerformanceSample, BlockProductionParams, BlockProductionResponse, ClusterNode, PaginationParams, ClusterNodesResponse, SupplyParams, SupplyResponse, VersionResponse } from './network.schema';
+import { EpochInfo, EpochInfoParams, NetworkStats, InflationRate, InflationReward, InflationRewardParams, AccountInfoParams, ProgramAccountsParams, BalanceResponse, TokenAccountBalance, AccountSubscribeParams, AccountSubscription, VoteSubscription, VoteNotification, SlotSubscription, SlotNotification, PerformanceSample, BlockProductionParams, BlockProductionResponse, ClusterNode, PaginationParams, ClusterNodesResponse, SupplyParams, SupplyResponse, VersionResponse, AccountInfo, ProgramAccount } from './network.schema';
 
 export class NetworkModel {
     private static cache: {
@@ -104,7 +104,7 @@ export class NetworkModel {
         return stats;
     }
 
-    static async getAccountInfo(pubkey: string, params: Omit<AccountInfoParams, 'pubkey'>) {
+    static async getAccountInfo(pubkey: string, params: Omit<AccountInfoParams, 'pubkey'>): Promise<AccountInfo> {
         return rpcService.getAccountInfo(pubkey, params);
     }
 
@@ -116,7 +116,7 @@ export class NetworkModel {
         return rpcService.getTokenAccountBalance(pubkey, params);
     }
 
-    static async getProgramAccounts(programId: string, params: Omit<ProgramAccountsParams, 'programId'>) {
+    static async getProgramAccounts(programId: string, params: Omit<ProgramAccountsParams, 'programId'>): Promise<ProgramAccount[]> {
         return rpcService.getProgramAccounts(programId, params);
     }
 
