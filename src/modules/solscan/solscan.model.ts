@@ -21,7 +21,10 @@ import { SolscanAccountDetailResponse, SolscanAccountTransactionsResponse, Solsc
     TransactionActionsResponse,
     MarketListResponse,
     MarketInfoResponse,
-    MarketVolumeResponse
+    MarketVolumeResponse,
+    TokenListRequest,
+    TokenListResponse,
+    TrendingTokensResponse
 
   } from './solscan.schema';
 
@@ -578,5 +581,14 @@ export class SolscanModel {
         }
     }
 
+    static async getTokenList(request: TokenListRequest): Promise<TokenListResponse> {
+        return await solscanService.getTokenList(request);
+    }
 
-} 
+    static async getTrendingTokens(limit?: number): Promise<TrendingTokensResponse> {
+        return await solscanService.getTrendingTokens(limit);
+    }
+
+}
+
+export const solscanModel = new SolscanModel(); 

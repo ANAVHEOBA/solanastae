@@ -25,11 +25,16 @@ export const environment = {
         windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || '900000', 10), // 15 minutes
         max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
     },
+    auth: {
+        jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
+        jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
+        saltRounds: parseInt(process.env.SALT_ROUNDS || '10', 10),
+    },
 };
 
 // Validate required environment variables
 const validateEnv = () => {
-    const required = ['MONGODB_URI', 'HELIUS_API_KEY'];
+    const required = ['MONGODB_URI', 'HELIUS_API_KEY', 'JWT_SECRET'];
     const missing = required.filter(key => !process.env[key]);
     
     if (missing.length > 0) {

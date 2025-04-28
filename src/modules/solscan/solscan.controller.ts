@@ -999,793 +999,940 @@ export class SolscanController {
         }
     }
 
+    async getTokenList(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting token list...');
+            const { 
+                sort_by = 'created_time',
+                sort_order = 'desc',
+                page = '1',
+                page_size = '10'
+            } = req.query;
 
+            // Validate sort_by
+            const validSortBy = ['holder', 'market_cap', 'created_time'];
+            if (sort_by && !validSortBy.includes(sort_by as string)) {
+                res.status(400).json({
+                    error: 'Invalid sort_by parameter. Must be one of: holder, market_cap, created_time'
+                });
+                return;
+            }
 
+            // Validate sort_order
+            if (sort_order && !['asc', 'desc'].includes(sort_order as string)) {
+                res.status(400).json({
+                    error: 'Invalid sort_order parameter. Must be "asc" or "desc"'
+                });
+                return;
+            }
 
+            // Validate page_size
+            const validPageSizes = [10, 20, 30, 40, 60, 100];
+            const parsedPageSize = parseInt(page_size as string);
+            if (!validPageSizes.includes(parsedPageSize)) {
+                res.status(400).json({
+                    error: 'Invalid page_size parameter. Must be one of: 10, 20, 30, 40, 60, 100'
+                });
+                return;
+            }
 
-
-async getLastTransactions(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting last transactions...');
-        const { limit = '10', filter = 'exceptVote' } = req.query;
-
-        // Validate limit
-        const validLimits = [10, 20, 30, 40, 60, 100];
-        const parsedLimit = parseInt(limit as string);
-        if (!validLimits.includes(parsedLimit)) {
-            res.status(400).json({
-                error: 'Invalid limit parameter. Must be one of: 10, 20, 30, 40, 60, 100'
+            const result = await SolscanModel.getTokenList({
+                sort_by: sort_by as 'holder' | 'market_cap' | 'created_time',
+                sort_order: sort_order as 'asc' | 'desc',
+                page: parseInt(page as string),
+                page_size: parsedPageSize as 10 | 20 | 30 | 40 | 60 | 100
             });
-            return;
-        }
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Token list not found'
+                });
+                return;
+            }
 
-        // Validate filter
-        if (filter !== 'exceptVote' && filter !== 'all') {
-            res.status(400).json({
-                error: 'Invalid filter parameter. Must be "exceptVote" or "all"'
+            console.log('[SolscanController] Successfully got token list:', {
+                count: result.data.length
             });
-            return;
-        }
 
-        const result = await SolscanModel.getLastTransactions(
-            parsedLimit as 10 | 20 | 30 | 40 | 60 | 100,
-            filter as 'exceptVote' | 'all'
-        );
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'No transactions found'
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting token list:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching token list'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getLastTransactions(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting last transactions...');
+            const { limit = '10', filter = 'exceptVote' } = req.query;
+
+            // Validate limit
+            const validLimits = [10, 20, 30, 40, 60, 100];
+            const parsedLimit = parseInt(limit as string);
+            if (!validLimits.includes(parsedLimit)) {
+                res.status(400).json({
+                    error: 'Invalid limit parameter. Must be one of: 10, 20, 30, 40, 60, 100'
+                });
+                return;
+            }
+
+            // Validate filter
+            if (filter !== 'exceptVote' && filter !== 'all') {
+                res.status(400).json({
+                    error: 'Invalid filter parameter. Must be "exceptVote" or "all"'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getLastTransactions(
+                parsedLimit as 10 | 20 | 30 | 40 | 60 | 100,
+                filter as 'exceptVote' | 'all'
+            );
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'No transactions found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got last transactions:', {
+                count: result.data.length
             });
-            return;
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting last transactions:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching last transactions'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
         }
+    }
 
-        console.log('[SolscanController] Successfully got last transactions:', {
-            count: result.data.length
-        });
+    async getTransactionDetail(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting transaction detail...');
+            const { tx } = req.query;
 
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting last transactions:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable. Please check your internet connection'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
+            if (!tx || typeof tx !== 'string') {
+                res.status(400).json({
+                    error: 'Missing or invalid tx parameter'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getTransactionDetail(tx);
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Transaction not found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got transaction detail:', {
+                tx_hash: result.data.tx_hash,
+                status: result.data.tx_status
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting transaction detail:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching transaction detail'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getTransactionActions(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting transaction actions...');
+            const { tx } = req.query;
+
+            if (!tx || typeof tx !== 'string') {
+                res.status(400).json({
+                    error: 'Missing or invalid tx parameter'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getTransactionActions(tx);
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Transaction actions not found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got transaction actions:', {
+                tx_hash: result.data.tx_hash,
+                activities_count: result.data.activities.length,
+                transfers_count: result.data.transfers.length
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting transaction actions:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching transaction actions'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getLastBlocks(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting last blocks...');
+            const { limit = '10' } = req.query;
+
+            // Validate limit
+            const validLimits = [10, 20, 30, 40, 60, 100];
+            const parsedLimit = parseInt(limit as string);
+            if (!validLimits.includes(parsedLimit)) {
+                res.status(400).json({
+                    error: 'Invalid limit parameter. Must be one of: 10, 20, 30, 40, 60, 100'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getLastBlocks(
+                parsedLimit as 10 | 20 | 30 | 40 | 60 | 100
+            );
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'No blocks found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got last blocks:', {
+                count: result.data.length
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting last blocks:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching last blocks'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getBlockTransactions(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting block transactions...');
+            const { block, page = '1', page_size = '10', exclude_vote, program } = req.query;
+
+            if (!block) {
+                res.status(400).json({
+                    error: 'Missing block parameter'
+                });
+                return;
+            }
+
+            const parsedBlock = parseInt(block as string);
+            if (isNaN(parsedBlock)) {
+                res.status(400).json({
+                    error: 'Invalid block parameter. Must be a number'
+                });
+                return;
+            }
+
+            // Validate page_size
+            const validPageSizes = [10, 20, 30, 40, 60, 100];
+            const parsedPageSize = parseInt(page_size as string);
+            if (!validPageSizes.includes(parsedPageSize)) {
+                res.status(400).json({
+                    error: 'Invalid page_size parameter. Must be one of: 10, 20, 30, 40, 60, 100'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getBlockTransactions(
+                parsedBlock,
+                parseInt(page as string),
+                parsedPageSize as 10 | 20 | 30 | 40 | 60 | 100,
+                exclude_vote === 'true',
+                program as string
+            );
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Block transactions not found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got block transactions:', {
+                total: result.data.total,
+                count: result.data.transactions.length
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting block transactions:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching block transactions'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getBlockDetail(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting block detail...');
+            const { block } = req.query;
+
+            if (!block) {
+                res.status(400).json({
+                    error: 'Missing block parameter'
+                });
+                return;
+            }
+
+            const parsedBlock = parseInt(block as string);
+            if (isNaN(parsedBlock)) {
+                res.status(400).json({
+                    error: 'Invalid block parameter. Must be a number'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getBlockDetail(parsedBlock);
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Block not found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got block detail:', {
+                slot: result.data.slot,
+                blockhash: result.data.blockhash
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting block detail:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching block detail'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getMarketList(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting market list...');
+            const { 
+                page = '1',
+                page_size = '10',
+                program,
+                token_address,
+                sort_by = 'created_time',
+                sort_order = 'desc'
+            } = req.query;
+
+            // Validate page_size
+            const validPageSizes = [10, 20, 30, 40, 60, 100];
+            const parsedPageSize = parseInt(page_size as string);
+            if (!validPageSizes.includes(parsedPageSize)) {
+                res.status(400).json({
+                    error: 'Invalid page_size parameter. Must be one of: 10, 20, 30, 40, 60, 100'
+                });
+                return;
+            }
+
+            // Validate sort_by
+            const validSortBy = ['created_time', 'volumes_24h', 'trades_24h'];
+            if (sort_by && !validSortBy.includes(sort_by as string)) {
+                res.status(400).json({
+                    error: 'Invalid sort_by parameter. Must be one of: created_time, volumes_24h, trades_24h'
+                });
+                return;
+            }
+
+            // Validate sort_order
+            if (sort_order && !['asc', 'desc'].includes(sort_order as string)) {
+                res.status(400).json({
+                    error: 'Invalid sort_order parameter. Must be "asc" or "desc"'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getMarketList(
+                parseInt(page as string),
+                parsedPageSize as 10 | 20 | 30 | 40 | 60 | 100,
+                program as string,
+                token_address as string,
+                sort_by as 'created_time' | 'volumes_24h' | 'trades_24h',
+                sort_order as 'asc' | 'desc'
+            );
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Market list not found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got market list:', {
+                count: result.data.length
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting market list:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching market list'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getMarketInfo(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting market info...');
+            const { address } = req.query;
+
+            if (!address || typeof address !== 'string') {
+                res.status(400).json({
+                    error: 'Missing or invalid address parameter'
+                });
+                return;
+            }
+
+            const result = await SolscanModel.getMarketInfo(address);
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Market info not found'
+                });
+                return;
+            }
+
+            console.log('[SolscanController] Successfully got market info:', {
+                pool_address: result.data.pool_address,
+                program_id: result.data.program_id
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting market info:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
+                }
+
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching market info'
+                    });
+                }
+            } else {
+                res.status(500).json({
+                    error: 'An unknown error occurred'
+                });
+            }
+        }
+    }
+
+    async getMarketVolume(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting market volume...');
+            const { address, time } = req.query;
+
+            if (!address || typeof address !== 'string') {
+                res.status(400).json({
+                    error: 'Missing or invalid address parameter'
+                });
+                return;
+            }
+
+            let timeRange: [string, string] | undefined;
+            if (Array.isArray(time) && time.length === 2) {
+                const [start, end] = time;
+                if (typeof start === 'string' && typeof end === 'string') {
+                    timeRange = [start, end];
                 }
             }
 
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
+            const result = await SolscanModel.getMarketVolume(address, timeRange);
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Market volume not found'
                 });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded. Please try again later.'
-                });
-            } else {
-                res.status(500).json({
-                    error: 'An error occurred while fetching last transactions'
-                });
+                return;
             }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
+
+            console.log('[SolscanController] Successfully got market volume:', {
+                pool_address: result.data.pool_address,
+                volume_24h: result.data.total_volume_24h
             });
-        }
-    }
-}
 
-
-
-
-async getTransactionDetail(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting transaction detail...');
-        const { tx } = req.query;
-
-        if (!tx || typeof tx !== 'string') {
-            res.status(400).json({
-                error: 'Missing or invalid tx parameter'
-            });
-            return;
-        }
-
-        const result = await SolscanModel.getTransactionDetail(tx);
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'Transaction not found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got transaction detail:', {
-            tx_hash: result.data.tx_hash,
-            status: result.data.tx_status
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting transaction detail:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable. Please check your internet connection'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting market volume:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
                 }
-            }
 
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded. Please try again later.'
-                });
-            } else {
-                res.status(500).json({
-                    error: 'An error occurred while fetching transaction detail'
-                });
-            }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
-        }
-    }
-}
-
-
-async getTransactionActions(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting transaction actions...');
-        const { tx } = req.query;
-
-        if (!tx || typeof tx !== 'string') {
-            res.status(400).json({
-                error: 'Missing or invalid tx parameter'
-            });
-            return;
-        }
-
-        const result = await SolscanModel.getTransactionActions(tx);
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'Transaction actions not found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got transaction actions:', {
-            tx_hash: result.data.tx_hash,
-            activities_count: result.data.activities.length,
-            transfers_count: result.data.transfers.length
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting transaction actions:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable. Please check your internet connection'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching market volume'
+                    });
                 }
-            }
-
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded. Please try again later.'
-                });
             } else {
                 res.status(500).json({
-                    error: 'An error occurred while fetching transaction actions'
+                    error: 'An unknown error occurred'
                 });
             }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
         }
     }
-}
 
+    async getTrendingTokens(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('[SolscanController] Getting trending tokens...');
+            const { limit } = req.query;
 
+            const result = await SolscanModel.getTrendingTokens(limit ? Number(limit) : undefined);
+            
+            if (!result.success) {
+                res.status(404).json({
+                    error: 'Trending tokens not found'
+                });
+                return;
+            }
 
-
-
-async getLastBlocks(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting last blocks...');
-        const { limit = '10' } = req.query;
-
-        // Validate limit
-        const validLimits = [10, 20, 30, 40, 60, 100];
-        const parsedLimit = parseInt(limit as string);
-        if (!validLimits.includes(parsedLimit)) {
-            res.status(400).json({
-                error: 'Invalid limit parameter. Must be one of: 10, 20, 30, 40, 60, 100'
+            console.log('[SolscanController] Successfully got trending tokens:', {
+                count: result.data.length
             });
-            return;
-        }
 
-        const result = await SolscanModel.getLastBlocks(
-            parsedLimit as 10 | 20 | 30 | 40 | 60 | 100
-        );
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'No blocks found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got last blocks:', {
-            count: result.data.length
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting last blocks:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable. Please check your internet connection'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
+            res.json(result);
+        } catch (error) {
+            console.error('[SolscanController] Error getting trending tokens:', error);
+            if (error instanceof Error) {
+                if ('code' in error) {
+                    switch (error.code) {
+                        case 'ETIMEDOUT':
+                            res.status(504).json({
+                                error: 'Request timed out while connecting to Solscan API'
+                            });
+                            return;
+                        case 'ENETUNREACH':
+                            res.status(503).json({
+                                error: 'Network is unreachable. Please check your internet connection'
+                            });
+                            return;
+                        case 'ECONNREFUSED':
+                            res.status(503).json({
+                                error: 'Connection refused by Solscan API'
+                            });
+                            return;
+                    }
                 }
-            }
 
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded. Please try again later.'
-                });
-            } else {
-                res.status(500).json({
-                    error: 'An error occurred while fetching last blocks'
-                });
-            }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
-        }
-    }
-}
-
-
-
-
-
-
-
-async getBlockTransactions(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting block transactions...');
-        const { block, page = '1', page_size = '10', exclude_vote, program } = req.query;
-
-        if (!block) {
-            res.status(400).json({
-                error: 'Missing block parameter'
-            });
-            return;
-        }
-
-        const parsedBlock = parseInt(block as string);
-        if (isNaN(parsedBlock)) {
-            res.status(400).json({
-                error: 'Invalid block parameter. Must be a number'
-            });
-            return;
-        }
-
-        // Validate page_size
-        const validPageSizes = [10, 20, 30, 40, 60, 100];
-        const parsedPageSize = parseInt(page_size as string);
-        if (!validPageSizes.includes(parsedPageSize)) {
-            res.status(400).json({
-                error: 'Invalid page_size parameter. Must be one of: 10, 20, 30, 40, 60, 100'
-            });
-            return;
-        }
-
-        const result = await SolscanModel.getBlockTransactions(
-            parsedBlock,
-            parseInt(page as string),
-            parsedPageSize as 10 | 20 | 30 | 40 | 60 | 100,
-            exclude_vote === 'true',
-            program as string
-        );
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'Block transactions not found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got block transactions:', {
-            total: result.data.total,
-            count: result.data.transactions.length
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting block transactions:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable. Please check your internet connection'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
+                if (error.message.includes('Invalid response format')) {
+                    res.status(502).json({
+                        error: 'Invalid response from Solscan API'
+                    });
+                } else if (error.message.includes('Unauthorized')) {
+                    res.status(401).json({
+                        error: 'Unauthorized access to Solscan API'
+                    });
+                } else if (error.message.includes('Rate limit')) {
+                    res.status(429).json({
+                        error: 'Rate limit exceeded. Please try again later.'
+                    });
+                } else {
+                    res.status(500).json({
+                        error: 'An error occurred while fetching trending tokens'
+                    });
                 }
-            }
-
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded. Please try again later.'
-                });
             } else {
                 res.status(500).json({
-                    error: 'An error occurred while fetching block transactions'
+                    error: 'An unknown error occurred'
                 });
             }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
         }
     }
-}
-
-async getBlockDetail(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting block detail...');
-        const { block } = req.query;
-
-        if (!block) {
-            res.status(400).json({
-                error: 'Missing block parameter'
-            });
-            return;
-        }
-
-        const parsedBlock = parseInt(block as string);
-        if (isNaN(parsedBlock)) {
-            res.status(400).json({
-                error: 'Invalid block parameter. Must be a number'
-            });
-            return;
-        }
-
-        const result = await SolscanModel.getBlockDetail(parsedBlock);
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'Block not found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got block detail:', {
-            slot: result.data.slot,
-            blockhash: result.data.blockhash
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting block detail:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable. Please check your internet connection'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
-                }
-            }
-
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded. Please try again later.'
-                });
-            } else {
-                res.status(500).json({
-                    error: 'An error occurred while fetching block detail'
-                });
-            }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
-        }
-    }
-}
-
-
-async getMarketList(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting market list...');
-        const { 
-            page = '1',
-            page_size = '10',
-            program,
-            token_address,
-            sort_by = 'created_time',
-            sort_order = 'desc'
-        } = req.query;
-
-        // Validate page_size
-        const validPageSizes = [10, 20, 30, 40, 60, 100];
-        const parsedPageSize = parseInt(page_size as string);
-        if (!validPageSizes.includes(parsedPageSize)) {
-            res.status(400).json({
-                error: 'Invalid page_size parameter. Must be one of: 10, 20, 30, 40, 60, 100'
-            });
-            return;
-        }
-
-        // Validate sort_by
-        const validSortBy = ['created_time', 'volumes_24h', 'trades_24h'];
-        if (sort_by && !validSortBy.includes(sort_by as string)) {
-            res.status(400).json({
-                error: 'Invalid sort_by parameter. Must be one of: created_time, volumes_24h, trades_24h'
-            });
-            return;
-        }
-
-        // Validate sort_order
-        if (sort_order && !['asc', 'desc'].includes(sort_order as string)) {
-            res.status(400).json({
-                error: 'Invalid sort_order parameter. Must be "asc" or "desc"'
-            });
-            return;
-        }
-
-        const result = await SolscanModel.getMarketList(
-            parseInt(page as string),
-            parsedPageSize as 10 | 20 | 30 | 40 | 60 | 100,
-            program as string,
-            token_address as string,
-            sort_by as 'created_time' | 'volumes_24h' | 'trades_24h',
-            sort_order as 'asc' | 'desc'
-        );
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'Market list not found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got market list:', {
-            count: result.data.length
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting market list:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable. Please check your internet connection'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
-                }
-            }
-
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded. Please try again later.'
-                });
-            } else {
-                res.status(500).json({
-                    error: 'An error occurred while fetching market list'
-                });
-            }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
-        }
-    }
-}
-
-
-
-async getMarketInfo(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting market info...');
-        const { address } = req.query;
-
-        if (!address || typeof address !== 'string') {
-            res.status(400).json({
-                error: 'Missing or invalid address parameter'
-            });
-            return;
-        }
-
-        const result = await SolscanModel.getMarketInfo(address);
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'Market info not found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got market info:', {
-            pool_address: result.data.pool_address,
-            program_id: result.data.program_id
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting market info:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
-                }
-            }
-
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded'
-                });
-            } else {
-                res.status(500).json({
-                    error: 'An error occurred while fetching market info'
-                });
-            }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
-        }
-    }
-}
-
-async getMarketVolume(req: Request, res: Response): Promise<void> {
-    try {
-        console.log('[SolscanController] Getting market volume...');
-        const { address, time } = req.query;
-
-        if (!address || typeof address !== 'string') {
-            res.status(400).json({
-                error: 'Missing or invalid address parameter'
-            });
-            return;
-        }
-
-        let timeRange: [string, string] | undefined;
-        if (Array.isArray(time) && time.length === 2) {
-            const [start, end] = time;
-            if (typeof start === 'string' && typeof end === 'string') {
-                timeRange = [start, end];
-            }
-        }
-
-        const result = await SolscanModel.getMarketVolume(address, timeRange);
-        
-        if (!result.success) {
-            res.status(404).json({
-                error: 'Market volume not found'
-            });
-            return;
-        }
-
-        console.log('[SolscanController] Successfully got market volume:', {
-            pool_address: result.data.pool_address,
-            volume_24h: result.data.total_volume_24h
-        });
-
-        res.json(result);
-    } catch (error) {
-        console.error('[SolscanController] Error getting market volume:', error);
-        if (error instanceof Error) {
-            if ('code' in error) {
-                switch (error.code) {
-                    case 'ETIMEDOUT':
-                        res.status(504).json({
-                            error: 'Request timed out while connecting to Solscan API'
-                        });
-                        return;
-                    case 'ENETUNREACH':
-                        res.status(503).json({
-                            error: 'Network is unreachable'
-                        });
-                        return;
-                    case 'ECONNREFUSED':
-                        res.status(503).json({
-                            error: 'Connection refused by Solscan API'
-                        });
-                        return;
-                }
-            }
-
-            if (error.message.includes('Invalid response format')) {
-                res.status(502).json({
-                    error: 'Invalid response from Solscan API'
-                });
-            } else if (error.message.includes('Unauthorized')) {
-                res.status(401).json({
-                    error: 'Unauthorized access to Solscan API'
-                });
-            } else if (error.message.includes('Rate limit')) {
-                res.status(429).json({
-                    error: 'Rate limit exceeded'
-                });
-            } else {
-                res.status(500).json({
-                    error: 'An error occurred while fetching market volume'
-                });
-            }
-        } else {
-            res.status(500).json({
-                error: 'An unknown error occurred'
-            });
-        }
-    }
-}
-
-
 } 

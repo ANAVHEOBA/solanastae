@@ -1,16 +1,40 @@
 import express, { Request, Response, NextFunction } from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
+import mongoose from 'mongoose';
 import { validatorRouter } from './modules/validator/validator.router';
 import { networkRouter } from './modules/network/network.router';
 import { solanaFMRouter } from './modules/solanafm/solanafm.router';
 import { solscanRouter } from './modules/solscan/solscan.router';
+import { whaleMonitorRouter } from './modules/whale-monitor/whale-monitor.router';
+import { authRouter } from './modules/auth/auth.router';
 import { errorMiddleware } from './middleware/error.middleware';
 import { rateLimit } from 'express-rate-limit';
 import { environment } from './config/environment';
+import { WebSocketService } from './services/websocket.service';
 
 // Create Express app
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+// Initialize WebSocket service
+const webSocketService = new WebSocketService(io);
+webSocketService.startMonitoring();
+
+// Connect to MongoDB
+mongoose.connect(environment.mongodb.uri, {
+    dbName: environment.mongodb.dbName
+})
+.then(() => console.log('Connected to MongoDB'))
+.catch(err => console.error('MongoDB connection error:', err));
 
 // Apply security middleware
 app.use(helmet());
@@ -31,10 +55,12 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/validators', validatorRouter);
 app.use('/api/v1/network', networkRouter);
 app.use('/api/v1/solanafm', solanaFMRouter);
 app.use('/api/v1/solscan', solscanRouter);
+app.use('/api/v1/whale-monitor', whaleMonitorRouter);
 
 // 404 handler - needs to be before error handler
 app.use((req: Request, res: Response) => {
@@ -46,4 +72,5 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     errorMiddleware(err, req, res, next);
 });
 
+export { httpServer as server };
 export default app;

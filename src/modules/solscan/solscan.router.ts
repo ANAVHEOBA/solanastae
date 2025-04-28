@@ -20,6 +20,9 @@ router.get('/token/holders', solscanController.getTokenHolders.bind(solscanContr
 router.get('/token/transfer', solscanController.getTokenTransfer.bind(solscanController));
 router.get('/token/defi/activities', solscanController.getTokenDefiActivities.bind(solscanController));
 
+router.get('/token/list', solscanController.getTokenList.bind(solscanController));
+router.get('/token/trending', solscanController.getTrendingTokens.bind(solscanController));
+
 router.get('/transaction/last', solscanController.getLastTransactions.bind(solscanController));
 router.get('/transaction/detail', solscanController.getTransactionDetail.bind(solscanController));
 router.get('/transaction/actions', solscanController.getTransactionActions.bind(solscanController));

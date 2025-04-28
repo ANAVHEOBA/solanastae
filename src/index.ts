@@ -1,14 +1,15 @@
-import app from './app';
+import { server } from './app';
 import { environment } from './config/environment';
 
 const PORT = environment.server.port;
 
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`
 🚀 Server is running!
 🔊 Listening on port ${PORT}
 🌍 Environment: ${environment.server.nodeEnv}
 📊 Validator API: http://localhost:${PORT}/api/v1/validators
+🔐 WebSocket: ws://localhost:${PORT}
 ❤️  Health check: http://localhost:${PORT}/health
     `);
 });

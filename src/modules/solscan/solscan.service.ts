@@ -30,7 +30,10 @@ import { SolscanAccountDetailResponse, SolscanError, SolscanTokenAccountsRequest
     MarketInfoRequest,
     MarketInfoResponse,
     MarketVolumeRequest,
-    MarketVolumeResponse
+    MarketVolumeResponse,
+    TokenListRequest,
+    TokenListResponse,
+    TrendingTokensResponse
  } from './solscan.schema';
 
 export class SolscanService {
@@ -719,6 +722,65 @@ export class SolscanService {
             console.log('[SolscanService] Successfully got market volume:', {
                 pool_address: response.data.data.pool_address,
                 volume_24h: response.data.data.total_volume_24h
+            });
+    
+            return response.data;
+        });
+    }
+
+    async getTokenList(request: TokenListRequest = {}): Promise<TokenListResponse> {
+        return this.retryRequest(async () => {
+            console.log('[SolscanService] Getting token list...', request);
+            
+            const response = await axios.get<TokenListResponse>(
+                `${this.baseUrl}/token/list`,
+                {
+                    params: {
+                        sort_by: request.sort_by,
+                        sort_order: request.sort_order,
+                        page: request.page,
+                        page_size: request.page_size
+                    },
+                    headers: {
+                        'Accept': 'application/json',
+                        'token': this.apiKey
+                    }
+                }
+            );
+    
+            if (!response.data || !response.data.success) {
+                throw new Error('Invalid response format from Solscan API');
+            }
+    
+            console.log('[SolscanService] Successfully got token list:', {
+                count: response.data.data.length
+            });
+    
+            return response.data;
+        });
+    }
+
+    async getTrendingTokens(limit: number = 10): Promise<TrendingTokensResponse> {
+        return this.retryRequest(async () => {
+            console.log('[SolscanService] Getting trending tokens...', { limit });
+            
+            const response = await axios.get<TrendingTokensResponse>(
+                `${this.baseUrl}/token/trending`,
+                {
+                    params: { limit },
+                    headers: {
+                        'Accept': 'application/json',
+                        'token': this.apiKey
+                    }
+                }
+            );
+    
+            if (!response.data || !response.data.success) {
+                throw new Error('Invalid response format from Solscan API');
+            }
+    
+            console.log('[SolscanService] Successfully got trending tokens:', {
+                count: response.data.data.length
             });
     
             return response.data;

@@ -795,3 +795,40 @@ export interface MarketVolumeRequest {
     address: string;
     time?: [string, string]; // Format: YYYYMMDD
 }
+
+export interface TokenListResponse {
+    success: boolean;
+    data: {
+        address: string;
+        decimals: number;
+        name: string;
+        symbol: string;
+        created_time: number;
+        price?: number;
+    }[];
+    metadata: Record<string, any>;
+}
+
+export interface TokenListRequest {
+    sort_by?: 'holder' | 'market_cap' | 'created_time';
+    sort_order?: 'asc' | 'desc';
+    page?: number;
+    page_size?: 10 | 20 | 30 | 40 | 60 | 100;
+}
+
+export interface TrendingToken {
+    address: string;
+    decimals: number;
+    name: string;
+    symbol: string;
+}
+
+export interface TrendingTokensResponse {
+    success: boolean;
+    data: TrendingToken[];
+    metadata: Record<string, any>;
+}
+
+export interface TrendingTokensRequest {
+    limit?: number;
+}
