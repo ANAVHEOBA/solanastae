@@ -1,16 +1,30 @@
 const io = require('socket.io-client');
 
-// Connect to DEX Activity channel
-const dexSocket = io('http://localhost:5000/dex-activity', {
-    transports: ['websocket']
+// Replace with your server URL
+const SERVER_URL = 'http://localhost:5000';
+
+// Test account address to monitor
+const TEST_ACCOUNT = '2YcwVbKx9L25Jpaj2vfWSXD5UKugZumWjzEe6suBUJi2';
+
+// Connect to all channels
+const watchlistSocket = io(`${SERVER_URL}/watchlist-activity`);
+const dexSocket = io(`${SERVER_URL}/dex-activity`);
+const transactionsSocket = io(`${SERVER_URL}/transactions`);
+const accountSocket = io(`${SERVER_URL}/whale-monitor/account`);
+
+// Watchlist Activity Channel
+watchlistSocket.on('connect', () => {
+    console.log('Connected to Watchlist Activity channel');
 });
 
-// Connect to Transactions channel
-const txSocket = io('http://localhost:5000/transactions', {
-    transports: ['websocket']
+watchlistSocket.on('new_activity', (data) => {
+    console.log('\n=== New Watchlist Activity ===');
+    console.log('Watchlist Item:', data.watchlistItem);
+    console.log('Transaction:', data.transaction);
+    console.log('Activity Type:', data.activityType);
 });
 
-// DEX Activity Channel Events
+// DEX Activity Channel
 dexSocket.on('connect', () => {
     console.log('Connected to DEX Activity channel');
 });
@@ -20,61 +34,71 @@ dexSocket.on('new-dex-activity', (transactions) => {
     transactions.forEach(tx => {
         console.log('Transaction Hash:', tx.tx_hash);
         console.log('Signer:', tx.signer);
-        console.log('Slot:', tx.slot);
-        console.log('Status:', tx.status);
-        console.log('Block Time:', tx.block_time);
-        console.log('Time:', tx.time);
         console.log('Program IDs:', tx.program_ids);
-        console.log('Parsed Instructions:', JSON.stringify(tx.parsed_instructions, null, 2));
         console.log('Fee:', tx.fee);
-        console.log('Timestamp:', tx.timestamp);
+        console.log('Block Time:', tx.block_time);
+        console.log('Status:', tx.status);
+        console.log('Type:', tx.type);
+        console.log('Is Large:', tx.is_large);
         console.log('-------------------');
     });
 });
 
-dexSocket.on('disconnect', () => {
-    console.log('Disconnected from DEX Activity channel');
-});
-
-// Transactions Channel Events
-txSocket.on('connect', () => {
+// Transactions Channel
+transactionsSocket.on('connect', () => {
     console.log('Connected to Transactions channel');
 });
 
-txSocket.on('large-transactions', (transactions) => {
+transactionsSocket.on('large-transactions', (transactions) => {
     console.log('\n=== Large Transactions ===');
     transactions.forEach(tx => {
         console.log('Transaction Hash:', tx.tx_hash);
         console.log('Signer:', tx.signer);
-        console.log('Slot:', tx.slot);
-        console.log('Status:', tx.status);
+        console.log('Amount:', tx.amount);
         console.log('Block Time:', tx.block_time);
-        console.log('Time:', tx.time);
-        console.log('Program IDs:', tx.program_ids);
-        console.log('Parsed Instructions:', JSON.stringify(tx.parsed_instructions, null, 2));
-        console.log('Fee:', tx.fee);
-        console.log('Timestamp:', tx.timestamp);
+        console.log('Status:', tx.status);
+        console.log('Type:', tx.type);
         console.log('-------------------');
     });
 });
 
-txSocket.on('disconnect', () => {
-    console.log('Disconnected from Transactions channel');
+// Account Monitoring Channel
+accountSocket.on('connect', () => {
+    console.log('Connected to Account Monitoring channel');
+    // Subscribe to test account
+    accountSocket.emit('subscribe', TEST_ACCOUNT);
 });
 
-// Handle errors
-dexSocket.on('error', (error) => {
-    console.error('DEX Activity channel error:', error);
+accountSocket.on('account-data', (data) => {
+    console.log('\n=== Initial Account Data ===');
+    console.log('Account Details:', data.details);
+    console.log('Portfolio:', data.portfolio);
+    console.log('Token Accounts:', data.tokenAccounts);
+    console.log('Stake Accounts:', data.stakeAccounts);
 });
 
-txSocket.on('error', (error) => {
-    console.error('Transactions channel error:', error);
+accountSocket.on('account-update', (update) => {
+    console.log('\n=== Account Update ===');
+    console.log('Changes:', update.changes);
+    console.log('New Data:', update.data);
+});
+
+accountSocket.on('large-transaction', (data) => {
+    console.log('\n=== Large Transaction Alert ===');
+    console.log('Address:', data.address);
+    console.log('Transactions:', data.transactions);
+});
+
+// Error handling
+[watchlistSocket, dexSocket, transactionsSocket, accountSocket].forEach(socket => {
+    socket.on('error', (error) => {
+        console.error('Socket Error:', error);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected');
+    });
 });
 
 // Keep the script running
-process.on('SIGINT', () => {
-    console.log('Closing connections...');
-    dexSocket.close();
-    txSocket.close();
-    process.exit();
-});
+console.log('WebSocket test script running. Press Ctrl+C to exit.');

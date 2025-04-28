@@ -44,4 +44,5 @@ export const authMiddleware: AuthMiddleware = asyncMiddleware(async (req: Reques
         console.error('Auth Middleware Error:', error);
         responseHelper.error(res, 'Internal server error', 500);
     }
-}) as AuthMiddleware; 
+
+}); 

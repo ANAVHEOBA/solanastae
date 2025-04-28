@@ -1,16 +1,45 @@
 import { Server } from 'socket.io';
 import { SolscanModel } from '../modules/solscan/solscan.model';
 import { WhaleMonitorModel } from '../modules/whale-monitor/whale-monitor.model';
+import { CacheService } from './cache.service';
+
+interface AccountChanges {
+    hasChanges: boolean;
+    balanceChanges: Array<{
+        oldBalance: number;
+        newBalance: number;
+    }>;
+    newTransactions: any[];
+    portfolioChanges: Array<{
+        oldPortfolio: any;
+        newPortfolio: any;
+    }>;
+    tokenAccountChanges: Array<{
+        oldTokenAccounts: any;
+        newTokenAccounts: any;
+    }>;
+    stakeAccountChanges: Array<{
+        oldStakeAccounts: any;
+        newStakeAccounts: any;
+    }>;
+    newTransfers: any[];
+    newDefiActivities: any[];
+}
 
 export class WebSocketService {
     private io: Server;
     private monitoringInterval: NodeJS.Timeout | null = null;
     private seenTransactions: Set<string> = new Set();
+    private monitoredAccounts: Set<string> = new Set();
+    private monitoringIntervals: Map<string, NodeJS.Timeout> = new Map();
+    private accountDataCache: Map<string, any> = new Map();
+    private cacheService: CacheService;
     private readonly DEX_PROGRAMS = [
         '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8', // Raydium
         'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc', // Whirlpool
         'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK'  // AMM V3
     ];
+    private readonly LARGE_TRANSACTION_THRESHOLD = 50000; // $50,000 threshold
 
     // Add large transaction thresholds
     private readonly LARGE_TRANSACTION_THRESHOLDS = {
@@ -42,6 +71,7 @@ export class WebSocketService {
 
     constructor(io: Server) {
         this.io = io;
+        this.cacheService = new CacheService();
         this.setupChannels();
     }
 
@@ -88,6 +118,37 @@ export class WebSocketService {
             
             socket.on('disconnect', () => {
                 console.log('Client disconnected from transaction details channel');
+            });
+        });
+
+        // Account Monitoring Channel
+        this.io.of('/whale-monitor/account').on('connection', (socket) => {
+            console.log('Client connected to account monitoring channel');
+            
+            socket.on('subscribe', async (address: string) => {
+                try {
+                    // Join the room for this address
+                    socket.join(`account:${address}`);
+                    
+                    // Get initial data
+                    const accountData = await this.getAccountData(address);
+                    
+                    // Send initial data
+                    socket.emit('account-data', accountData);
+                    
+                    // Start monitoring the account
+                    this.startAccountMonitoring(address);
+                } catch (error) {
+                    socket.emit('error', { message: 'Failed to subscribe to account' });
+                }
+            });
+            
+            socket.on('unsubscribe', (address: string) => {
+                socket.leave(`account:${address}`);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Client disconnected from account monitoring channel');
             });
         });
     }
@@ -362,6 +423,195 @@ export class WebSocketService {
         if (this.monitoringInterval) {
             clearInterval(this.monitoringInterval);
             this.monitoringInterval = null;
+        }
+    }
+
+    private async getAccountData(address: string) {
+        try {
+            const [accountDetails, transactions, portfolio, tokenAccounts, stakeAccounts, transfers, defiActivities] = await Promise.all([
+                SolscanModel.getAccountDetail(address),
+                SolscanModel.getAccountTransactions(address, 10),
+                SolscanModel.getPortfolio(address),
+                SolscanModel.getTokenAccounts(address, 'token'),
+                SolscanModel.getStakeAccounts(address, 10),
+                SolscanModel.getTransfers(address),
+                SolscanModel.getDefiActivities(address, {})
+            ]);
+
+            return {
+                details: accountDetails,
+                transactions: transactions.data,
+                portfolio: portfolio.data,
+                tokenAccounts: tokenAccounts.data,
+                stakeAccounts: stakeAccounts.data,
+                transfers: transfers.data,
+                defiActivities: defiActivities.data,
+                lastUpdated: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('Error fetching account data:', error);
+            throw error;
+        }
+    }
+
+    private async monitorLargeTransactions(address: string) {
+        try {
+            // Get recent transfers for the account
+            const transfers = await SolscanModel.getTransfers(address);
+            
+            // Filter for large outbound transactions
+            const largeTransactions = transfers.data.filter(transfer => 
+                transfer.flow === 'out' && 
+                transfer.value > this.LARGE_TRANSACTION_THRESHOLD &&
+                !this.seenTransactions.has(transfer.trans_id)
+            );
+
+            if (largeTransactions.length > 0) {
+                // Add to seen transactions
+                largeTransactions.forEach(tx => this.seenTransactions.add(tx.trans_id));
+
+                // Emit large transaction notification
+                this.io.of('/whale-monitor/account')
+                    .to(`account:${address}`)
+                    .emit('large-transaction', {
+                        type: 'large_transaction',
+                        data: {
+                            address,
+                            transactions: largeTransactions.map(tx => ({
+                                tx_hash: tx.trans_id,
+                                amount: tx.value,
+                                timestamp: tx.block_time,
+                                from: tx.from_address,
+                                to: tx.to_address,
+                                token: tx.token_address
+                            }))
+                        }
+                    });
+            }
+        } catch (error) {
+            console.error('Error monitoring large transactions:', error);
+        }
+    }
+
+    private startAccountMonitoring(address: string) {
+        // Check if already monitoring this address
+        if (this.monitoredAccounts.has(address)) return;
+
+        this.monitoredAccounts.add(address);
+
+        const interval = setInterval(async () => {
+            try {
+                // Monitor large transactions
+                await this.monitorLargeTransactions(address);
+
+                const newData = await this.getAccountData(address);
+                const oldData = this.accountDataCache.get(address);
+
+                // Compare and detect changes
+                const changes = this.detectAccountChanges(oldData, newData);
+
+                if (changes.hasChanges) {
+                    // Update cache
+                    this.accountDataCache.set(address, newData);
+
+                    // Emit changes to all clients in the room
+                    this.io.of('/whale-monitor/account')
+                        .to(`account:${address}`)
+                        .emit('account-update', {
+                            changes,
+                            data: newData
+                        });
+                }
+            } catch (error) {
+                console.error('Error monitoring account:', error);
+            }
+        }, 30000); // Check every 30 seconds
+
+        this.monitoringIntervals.set(address, interval);
+    }
+
+    private detectAccountChanges(oldData: any, newData: any): AccountChanges {
+        const changes: AccountChanges = {
+            hasChanges: false,
+            balanceChanges: [],
+            newTransactions: [],
+            portfolioChanges: [],
+            tokenAccountChanges: [],
+            stakeAccountChanges: [],
+            newTransfers: [],
+            newDefiActivities: []
+        };
+
+        // Check balance changes
+        if (oldData?.details?.balance !== newData.details.balance) {
+            changes.hasChanges = true;
+            changes.balanceChanges.push({
+                oldBalance: oldData?.details?.balance,
+                newBalance: newData.details.balance
+            });
+        }
+
+        // Check for new transactions
+        const oldTxHashes = new Set(oldData?.transactions?.map((tx: any) => tx.tx_hash));
+        const newTransactions = newData.transactions.filter((tx: any) => !oldTxHashes.has(tx.tx_hash));
+        if (newTransactions.length > 0) {
+            changes.hasChanges = true;
+            changes.newTransactions = newTransactions;
+        }
+
+        // Check portfolio changes
+        if (JSON.stringify(oldData?.portfolio) !== JSON.stringify(newData.portfolio)) {
+            changes.hasChanges = true;
+            changes.portfolioChanges.push({
+                oldPortfolio: oldData?.portfolio,
+                newPortfolio: newData.portfolio
+            });
+        }
+
+        // Check token account changes
+        if (JSON.stringify(oldData?.tokenAccounts) !== JSON.stringify(newData.tokenAccounts)) {
+            changes.hasChanges = true;
+            changes.tokenAccountChanges.push({
+                oldTokenAccounts: oldData?.tokenAccounts,
+                newTokenAccounts: newData.tokenAccounts
+            });
+        }
+
+        // Check stake account changes
+        if (JSON.stringify(oldData?.stakeAccounts) !== JSON.stringify(newData.stakeAccounts)) {
+            changes.hasChanges = true;
+            changes.stakeAccountChanges.push({
+                oldStakeAccounts: oldData?.stakeAccounts,
+                newStakeAccounts: newData.stakeAccounts
+            });
+        }
+
+        // Check for new transfers
+        const oldTransferHashes = new Set(oldData?.transfers?.map((t: any) => t.tx_hash));
+        const newTransfers = newData.transfers.filter((t: any) => !oldTransferHashes.has(t.tx_hash));
+        if (newTransfers.length > 0) {
+            changes.hasChanges = true;
+            changes.newTransfers = newTransfers;
+        }
+
+        // Check for new DeFi activities
+        const oldDefiHashes = new Set(oldData?.defiActivities?.map((a: any) => a.tx_hash));
+        const newDefiActivities = newData.defiActivities.filter((a: any) => !oldDefiHashes.has(a.tx_hash));
+        if (newDefiActivities.length > 0) {
+            changes.hasChanges = true;
+            changes.newDefiActivities = newDefiActivities;
+        }
+
+        return changes;
+    }
+
+    private stopAccountMonitoring(address: string) {
+        const interval = this.monitoringIntervals.get(address);
+        if (interval) {
+            clearInterval(interval);
+            this.monitoringIntervals.delete(address);
+            this.monitoredAccounts.delete(address);
+            this.accountDataCache.delete(address);
         }
     }
 } 

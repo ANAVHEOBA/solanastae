@@ -22,4 +22,7 @@ router.get('/alerts', whaleMonitorController.getAlertConfig as RequestHandler);
 // Activity Routes
 router.get('/activity', whaleMonitorController.getWhaleActivity as RequestHandler);
 
+// Account Monitoring Routes
+router.get('/account/:address', whaleMonitorController.getAccountDetails as RequestHandler);
+
 export const whaleMonitorRouter = router; 

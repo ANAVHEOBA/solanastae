@@ -30,6 +30,11 @@ export const environment = {
         jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
         saltRounds: parseInt(process.env.SALT_ROUNDS || '10', 10),
     },
+    redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD || '',
+    },
 };
 
 // Validate required environment variables
@@ -42,4 +47,3 @@ const validateEnv = () => {
     }
 };
 
-validateEnv();
