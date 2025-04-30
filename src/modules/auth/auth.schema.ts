@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 export interface User {
-    id: string;
+    _id?: string;
+    id?: string;
     email: string;
     password: string;
     createdAt: Date;

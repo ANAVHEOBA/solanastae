@@ -11,7 +11,16 @@ a@a:~/solanastae$ curl -X POST http://localhost:5000/api/v1/whale-monitor/watchl
 
 
 
-
+a@a:~/solanastae$ curl -X POST http://localhost:5000/api/v1/whale-monitor/watchlist \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIycGc2byIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsInR5cGUiOiJ1c2VyIiwiaWF0IjoxNzQ1OTQxMjI3LCJleHAiOjE3NDYwMjc2Mjd9.pZH5bsG7w2TECBfTVN3WuBtt9YIR-ieMjLp_3YVcdzE" \
+-d '{
+    "address": "qRUZaCpgxaRH1s5V6opjPA6Hnpv5BM37LqkDBw7pump",
+    "label": "Test Token",
+    "type": "token",
+    "notes": "Monitoring token activities"
+}'
+{"success":true,"message":"Success","data":{"item":{"id":"f06585e2-d932-4dec-b320-47f71a1ef153","userId":"2pg6o","address":"qRUZaCpgxaRH1s5V6opjPA6Hnpv5BM37LqkDBw7pump","label":"Test Token","type":"token","notes":"Monitoring token activities","tokenSymbol":"MvG","tokenName":"100 Men vs 1 Gorilla","tokenDecimals":6,"createdAt":"2025-04-29T15:52:40.515Z","updatedAt":"2025-04-29T15:52:40.515Z"}}}a@a:~/solanastae$ 
 
 
 
@@ -173,3 +182,62 @@ Low Priority (Daily summary):
 Small transactions
 Regular balance changes
 Minor DeFi activities
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   Every 30 seconds:
+   
+   Step 1: Check Transactions
+   - Poll /transactions endpoint
+   - Compare latest tx_hash with stored last_hash
+   - If different → New transaction detected
+   
+   Step 2: Get Amount Details
+   - When new transaction detected
+   - Poll /defi/activities endpoint
+   - Match transaction by timestamp/block_time
+   - Extract amount and token details
+   
+   Step 3: Emit Notification
+   - Combine transaction info + amount details
+   - Format notification payload
+   - Send via WebSocket
+   
+   Step 4: Update State
+   - Store new tx_hash as last_hash
+   - Update last checked timestamp
+
+
+
+
+
+
+      {
+     "type": "transaction",
+     "data": {
+       "tx_hash": "...",
+       "transaction_type": "...",
+       "timestamp": "...",
+       "amount": "...",
+       "token_details": {
+         "from_token": "...",
+         "to_token": "...",
+         "from_amount": "...",
+         "to_amount": "..."
+       }
+     }
+   }

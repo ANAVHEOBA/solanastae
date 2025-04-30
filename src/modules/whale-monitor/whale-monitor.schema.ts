@@ -16,7 +16,8 @@ export enum NotificationType {
 }
 
 export interface WatchlistItem {
-    id: string;
+    _id?: string;
+    id?: string;
     userId: string;
     address: string;
     label: string;
@@ -30,7 +31,8 @@ export interface WatchlistItem {
 }
 
 export interface AlertConfig {
-    id: string;
+    _id?: string;
+    id?: string;
     userId: string;
     threshold: number; // in SOL or token amount
     notificationType: NotificationType;
@@ -39,12 +41,14 @@ export interface AlertConfig {
     monitorTransfers: boolean;
     monitorSwaps: boolean;
     monitorPrice: boolean;
+    largeTransferThreshold: number;
     createdAt: Date;
     updatedAt: Date;
 }
 
 export interface WhaleActivity {
-    id: string;
+    _id?: string;
+    id?: string;
     address: string;
     transactionHash: string;
     amount: number;
@@ -76,7 +80,8 @@ export const alertConfigSchema = z.object({
     isActive: z.boolean().default(true),
     monitorTransfers: z.boolean().default(true),
     monitorSwaps: z.boolean().default(true),
-    monitorPrice: z.boolean().default(false)
+    monitorPrice: z.boolean().default(false),
+    largeTransferThreshold: z.number().min(0).default(1000)
 });
 
 export type WatchlistItemInput = z.infer<typeof watchlistItemSchema>;

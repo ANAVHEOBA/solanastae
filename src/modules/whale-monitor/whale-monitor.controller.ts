@@ -5,6 +5,7 @@ import { WatchlistItemInput, AlertConfigInput } from './whale-monitor.schema';
 import { responseHelper } from '../../utils/response.helper';
 import { SolscanModel } from '../solscan/solscan.model';
 import { CacheService } from '../../services/cache.service';
+import { TransactionMonitorService } from '../../services/transaction-monitor.service';
 
 export class WhaleMonitorController {
     private whaleMonitorCrud: WhaleMonitorCrud;
@@ -20,7 +21,13 @@ export class WhaleMonitorController {
         try {
             const userId = req.user.id;
             const input: WatchlistItemInput = req.body;
+            
+            // Create watchlist item
             const item = await this.whaleMonitorCrud.createWatchlistItem(userId, input);
+            
+            // Initialize transaction monitoring for the address
+            await TransactionMonitorService.initializeMonitoring(input.address);
+            
             responseHelper.success(res, { item });
         } catch (error) {
             responseHelper.error(res, error);

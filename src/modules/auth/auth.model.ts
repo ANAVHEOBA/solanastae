@@ -1,46 +1,84 @@
 import { User, RegisterInput, LoginInput } from './auth.schema';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+
+// Define User Schema
+const userSchema = new mongoose.Schema({
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+        lowercase: true
+    },
+    password: {
+        type: String,
+        required: true
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+// Create User Model
+const UserModel = mongoose.model<User>('User', userSchema);
 
 export class AuthModel {
-    private static users: User[] = [];
     private static readonly JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
     private static readonly SALT_ROUNDS = 10;
     private static readonly JWT_EXPIRES_IN = '24h';
 
     static async register(input: RegisterInput): Promise<User> {
-        const existingUser = this.users.find(user => user.email === input.email);
+        // Check if user exists
+        const existingUser = await UserModel.findOne({ email: input.email });
         if (existingUser) {
             throw new Error('User already exists');
         }
 
+        // Hash password
         const hashedPassword = await bcrypt.hash(input.password, this.SALT_ROUNDS);
-        const user: User = {
-            id: Math.random().toString(36).substring(7),
-            email: input.email,
-            password: hashedPassword,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
 
-        this.users.push(user);
-        return user;
+        // Create new user
+        const user = new UserModel({
+            email: input.email,
+            password: hashedPassword
+        });
+
+        // Save to database
+        await user.save();
+
+        return {
+            id: user._id.toString(),
+            email: user.email,
+            password: user.password,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt
+        };
     }
 
     static async login(input: LoginInput): Promise<string> {
-        const user = this.users.find(user => user.email === input.email);
+        // Find user by email
+        const user = await UserModel.findOne({ email: input.email });
         if (!user) {
             throw new Error('Invalid credentials');
         }
 
+        // Verify password
         const isValidPassword = await bcrypt.compare(input.password, user.password);
         if (!isValidPassword) {
             throw new Error('Invalid credentials');
         }
 
+        // Generate JWT token
         return jwt.sign(
             { 
-                userId: user.id,
+                userId: user._id.toString(),
                 email: user.email,
                 type: 'user'
             }, 
@@ -64,6 +102,12 @@ export class AuthModel {
 
             if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
                 throw new Error('Token has expired');
+            }
+
+            // Verify user still exists in database
+            const user = await UserModel.findById(decoded.userId);
+            if (!user) {
+                throw new Error('User not found');
             }
 
             return decoded.userId;

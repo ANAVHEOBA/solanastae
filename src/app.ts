@@ -1,6 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
@@ -10,6 +9,7 @@ import { solanaFMRouter } from './modules/solanafm/solanafm.router';
 import { solscanRouter } from './modules/solscan/solscan.router';
 import { whaleMonitorRouter } from './modules/whale-monitor/whale-monitor.router';
 import { authRouter } from './modules/auth/auth.router';
+import { analyticsRouter } from './modules/analytics/analytics.router';
 import { errorMiddleware } from './middleware/error.middleware';
 import { rateLimit } from 'express-rate-limit';
 import { environment } from './config/environment';
@@ -18,16 +18,9 @@ import { WebSocketService } from './services/websocket.service';
 // Create Express app
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
 
 // Initialize WebSocket service
-const webSocketService = new WebSocketService(io);
-webSocketService.startMonitoring();
+WebSocketService.initialize(httpServer);
 
 // Connect to MongoDB
 mongoose.connect(environment.mongodb.uri, {
@@ -61,6 +54,7 @@ app.use('/api/v1/network', networkRouter);
 app.use('/api/v1/solanafm', solanaFMRouter);
 app.use('/api/v1/solscan', solscanRouter);
 app.use('/api/v1/whale-monitor', whaleMonitorRouter);
+app.use('/api/v1/analytics', analyticsRouter);
 
 // 404 handler - needs to be before error handler
 app.use((req: Request, res: Response) => {
